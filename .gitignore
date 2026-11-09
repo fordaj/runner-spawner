@@ -1,0 +1,11 @@
+# Go
+/dist/
+/runner-spawner
+*.test
+
+# runners
+.runners/
+.DS_Store
+
+# tooling (uv)
+.venv/

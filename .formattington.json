@@ -1,0 +1,3 @@
+{
+  "commands": [["prettier"], ["goimports"], ["shfmt", "-i", "4"]]
+}
