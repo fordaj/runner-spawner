@@ -123,6 +123,11 @@ func extractTarGz(archivePath, dir string) error {
 		if err != nil {
 			return err
 		}
+		// The published actions/runner tarballs start with a "." / "./"
+		// directory entry; the destination dir already exists, so skip it.
+		if filepath.Clean(hdr.Name) == "." {
+			continue
+		}
 		target, err := safeJoin(dir, hdr.Name)
 		if err != nil {
 			return err
@@ -170,6 +175,10 @@ func extractZip(archivePath, dir string) error {
 	}
 	defer r.Close()
 	for _, f := range r.File {
+		// Skip zip entries for the archive root itself (".", "./").
+		if filepath.Clean(f.Name) == "." {
+			continue
+		}
 		target, err := safeJoin(dir, f.Name)
 		if err != nil {
 			return err
