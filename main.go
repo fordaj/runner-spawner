@@ -19,6 +19,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -27,6 +28,9 @@ import (
 )
 
 func main() {
+	// run prints errors to stderr (errors are never suppressed by --quiet;
+	// --quiet only suppresses status logs), so main only maps the error to
+	// an exit code.
 	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
 		os.Exit(exitCode(err))
 	}
@@ -41,10 +45,34 @@ type codedError struct {
 func (e *codedError) Error() string { return e.msg }
 
 func exitCode(err error) int {
-	if ce, ok := err.(*codedError); ok {
+	var ce *codedError
+	if errors.As(err, &ce) {
 		return ce.code
 	}
 	return 1
+}
+
+// reportedError marks an error whose message was already printed to stderr
+// (e.g. by the flag package or an explicit usage print), so the central
+// error print in run does not duplicate it.
+type reportedError struct {
+	err error
+}
+
+func (e *reportedError) Error() string {
+	if e.err == nil {
+		return ""
+	}
+	return e.err.Error()
+}
+
+func (e *reportedError) Unwrap() error { return e.err }
+
+func markReported(err error) error { return &reportedError{err: err} }
+
+func isReported(err error) bool {
+	var re *reportedError
+	return errors.As(err, &re)
 }
 
 func configErrf(format string, args ...any) error {
@@ -78,6 +106,14 @@ func (f nameFlag) Set(s string) error {
 }
 
 func run(args []string, stdout, stderr io.Writer) error {
+	err := runInner(args, stdout, stderr)
+	if err != nil && !isReported(err) {
+		fmt.Fprintln(stderr, "runner-spawner:", err)
+	}
+	return err
+}
+
+func runInner(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
 		printUsage(stderr)
 		return &codedError{code: 2, msg: "missing subcommand"}
@@ -94,7 +130,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 	default:
 		fmt.Fprintf(stderr, "unknown subcommand %q\n\n", args[0])
 		printUsage(stderr)
-		return usageErrf("unknown subcommand %q", args[0])
+		return markReported(usageErrf("unknown subcommand %q", args[0]))
 	}
 }
 
@@ -176,7 +212,8 @@ func runVerb(verb string, args []string, stdout, stderr io.Writer) error {
 		if err == flag.ErrHelp {
 			return nil
 		}
-		return usageErrf("%v", err)
+		// The flag package already printed the error and usage to stderr.
+		return markReported(usageErrf("%v", err))
 	}
 	if fs.NArg() > 0 {
 		return usageErrf("unexpected positional arguments: %s", strings.Join(fs.Args(), " "))
@@ -207,7 +244,6 @@ func runVerb(verb string, args []string, stdout, stderr io.Writer) error {
 	}
 	if configFile != "" {
 		if err := cfg.LoadFile(configFile); err != nil {
-			fmt.Fprintln(stderr, "runner-spawner:", err)
 			return configErrf("%v", err)
 		}
 	} else if explicitConfig != "" {
@@ -228,7 +264,6 @@ func runVerb(verb string, args []string, stdout, stderr io.Writer) error {
 
 	// Env layer.
 	if err := cfg.ApplyEnv(nil); err != nil {
-		fmt.Fprintln(stderr, "runner-spawner:", err)
 		return configErrf("%v", err)
 	}
 
