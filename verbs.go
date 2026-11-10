@@ -220,7 +220,7 @@ func createOne(cfg *Config, p platform, name string, stdout, stderr io.Writer) e
 		svc := serviceScript(dir, p)
 		for _, sub := range []string{"install", "start"} {
 			logf(fmt.Sprintf("svc.sh %s", sub))
-			if err := runScript(svc, sub); err != nil {
+			if err := runScriptInDir(svc, []string{sub}, dir); err != nil {
 				return fmt.Errorf("runner %s: svc.sh %s: %w", name, sub, err)
 			}
 		}
@@ -333,7 +333,7 @@ func controlOne(cfg *Config, p platform, name, verb string, stderr io.Writer) er
 	}
 	svc := serviceScript(dir, p)
 	sub := verb // svc.sh start/stop
-	if err := runScript(svc, sub); err != nil {
+	if err := runScriptInDir(svc, []string{sub}, dir); err != nil {
 		return fmt.Errorf("runner %s: svc.sh %s: %w", name, sub, err)
 	}
 	return nil
