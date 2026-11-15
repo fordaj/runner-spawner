@@ -7,16 +7,19 @@ on:
     types: [opened, synchronize, reopened]
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check-formatting:
-    name: Check Formatting
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { os: macOS, labels: [self-hosted, macOS] }
-          - { os: Windows, labels: [self-hosted, Windows] }
-    runs-on: ${{ matrix.labels }}
+    name: Check Formatting (Windows)
+    # NOTE: macOS legs removed — both [self-hosted, macOS] runners
+    # (maestro-ci-macos, maestro-ci-windows) are OFFLINE, so macOS jobs
+    # queue forever. See https://github.com/fordaj/runner-spawner/issues/9.
+    # Restore a macOS leg ([self-hosted, macOS]) once those runners are back.
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 15
     defaults:
       run:
         shell: bash
@@ -25,13 +28,18 @@ jobs:
         with:
           fetch-depth: 0
 
+      # cache: false — setup-go's Post Run cache step hangs indefinitely
+      # on these self-hosted Windows runners.
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
+          cache: false
 
       # goimports via `go install` (lands in $(go env GOPATH)/bin).
+      # Pinned to v0.30.0: newer x/tools releases require go >= 1.26,
+      # newer than the go on PATH here (1.23.x, GOTOOLCHAIN=local).
       - name: Install goimports
-        run: go install golang.org/x/tools/cmd/goimports@latest
+        run: go install golang.org/x/tools/cmd/goimports@v0.30.0
 
       # uv for the Python side (formattington via uv run). uv also
       # fetches CPython 3.14 on first use.
@@ -80,14 +88,13 @@ jobs:
         run: ./ci/format_check.bash
 
   test:
-    name: Test (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { os: macOS, labels: [self-hosted, macOS] }
-          - { os: Windows, labels: [self-hosted, Windows] }
-    runs-on: ${{ matrix.labels }}
+    name: Test (Windows)
+    # NOTE: macOS leg removed — [self-hosted, macOS] runners are OFFLINE,
+    # so macOS jobs queue forever. See
+    # https://github.com/fordaj/runner-spawner/issues/9.
+    # Restore a macOS leg ([self-hosted, macOS]) once those runners are back.
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 15
     defaults:
       run:
         shell: bash
@@ -95,9 +102,12 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+      # cache: false — setup-go's Post Run cache step hangs indefinitely
+      # on these self-hosted Windows runners.
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
+          cache: false
       - run: go vet ./...
       - run: gofmt -l . && test -z "$(gofmt -l .)"
       - run: go test ./...
