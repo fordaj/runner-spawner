@@ -16,7 +16,7 @@ import (
 //
 // Config file location: <repoDir>/.runner-spawner.json (auto-discovered),
 // unless --config / RUNNER_SPAWNER_CONFIG points elsewhere. Copy
-// runner-spawner.example.json to get started.
+// .runner-spawner.json (see `runner-spawner init`).
 type Config struct {
 	ConfigPath string `json:"-"`
 	RepoDir    string `json:"repoDir"`

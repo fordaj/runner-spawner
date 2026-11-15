@@ -1,7 +1,7 @@
 {
   "owner": "fordaj",
-  "repo": "AirFrame",
-  "runnerNames": ["runner01", "runner02"],
+  "repo": "runner-spawner",
+  "runnerNames": ["ci-macos", "ci-windows"],
   "runnersDir": ".runners",
   "runnerGroup": "Default",
   "runnerVersion": "2.338.2"

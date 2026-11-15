@@ -102,8 +102,10 @@ without touching the network or disk:
 
 ### First-time setup for a target repo
 
-1. Add a config file to the target repo (defaults shown; copy
-   `runner-spawner.example.json`):
+1. Add a config file to the target repo — either copy the committed
+   [`.runner-spawner.json`](.runner-spawner.json) as a starting point, or run
+   `runner-spawner init` inside the repo (it detects owner/repo from the git
+   remote and writes the file for you):
 
    ```json
    {
@@ -209,7 +211,7 @@ use (LaunchAgent load prompts).
 
 ```bash
 make build|test|vet|cross   # `cross` emits dist/<goos>-<goarch>/
-./release.bash --dry-run    # compute next tag + build, touch nothing remote
+./scripts/release.sh --dry-run    # compute next tag + build, touch nothing remote
 ./format.bash               # format: prettier + goimports + shfmt
 ./ci/format_check.bash      # check formatting without modifying (CI)
 ```
@@ -239,20 +241,22 @@ configured by `.prettierrc`. Prerequisites (`uv`, Go with
 /            # Go module (typical Go layout; `package main` at root)
   go.mod, main.go, config.go, git.go, platform.go, archive.go,
   token.go, runner.go, verbs.go, script.go, *_test.go
-  Makefile  release.bash  runner-spawner.example.json
+  Makefile  scripts/release.sh  .runner-spawner.json  .versioner.json
   format.bash  ci/format_check.bash  pyproject.toml  uv.lock
-  .formattington.json  .prettierrc  .python-version
+  .formattington.json  .prettierrc  .python-version  LICENSE
   scripts/  env.sh + .common.env + .<platform>.env (cascade + log())
   tools/
     versioner/    v*/<platform>/versioner[.exe]   + update.bash
     logamuffin/   v*/<platform>/logamuffin[.exe]  + update.bash
     runner-spawner/ v*/<platform>/runner-spawner[.exe]  + update.bash
+    barnacle/     v*/<platform>/barnacle[.exe]    + update.bash
+    formattington-lite/ v*/<platform>/formattington[.exe] + update.bash
 ```
 
 - `make build|test|vet|cross`. `cross` emits `dist/<goos>-<goarch>/`.
-- `release.bash` computes the next tag with the bundled `versioner`,
+- `scripts/release.sh` computes the next tag with the bundled `versioner`,
   cross-compiles with `ldflags toolVersion=$TAG`, packs
-  `RunnerSpawner_<tag>_<arch>.7z` (+ checksums), tags, and publishes
+  `RunnerSpawner_<tag>_<arch>.tar.gz` (`.zip` on Windows; + checksums), tags, and publishes
   the GitHub release. `--dry-run` touches nothing remote.
 - `tools/runner-spawner/update.bash` downloads the latest release,
   verifies checksums, extracts each platform binary into
@@ -270,11 +274,12 @@ name.
 
 ## CI
 
-`.github/workflows/ci.yml` runs `go vet ./...`, `go test ./...` and
-the format checks on **self-hosted runners only** (this repo is the
-tool that provisions them — no GitHub-hosted compute, and no Linux
-job). Jobs target
-`runs-on: [self-hosted, macos]` / `[self-hosted, windows]`; create
+`.github/workflows/ci.yml` runs on **self-hosted runners only** (this repo
+is the tool that provisions them — no GitHub-hosted compute, and no Linux
+job). Two jobs: `Check Formatting` (`./ci/format_check.bash` after installing
+uv, prettier, shfmt and goimports) and `Test` (`go vet ./...`, a `gofmt`
+check, `go test ./...` on macOS and Windows). Jobs target
+`runs-on: [self-hosted, macOS]` / `[self-hosted, Windows]`; create
 the runners with this tool itself. On this repo:
 
 ```bash
@@ -282,10 +287,8 @@ runner-spawner create --repo-dir <repo> --owner fordaj --repo runner-spawner --n
 runner-spawner create --repo-dir <repo> --owner fordaj --repo runner-spawner --name ci-windows
 ```
 
-(Any labels matching `[self-hosted, macos]` / `[self-hosted, windows]`
-work; the tool's auto-labels already include `self-hosted` + the OS.)
-The workflow is `pull_request`- and `push`-triggered and covers both
-architectures where the runner image allows.
+(The committed `.runner-spawner.json` already lists `ci-macos` and
+`ci-windows`.) The workflow is `pull_request`- and `push`-triggered.
 
 ## Not yet done
 

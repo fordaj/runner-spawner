@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"os"
 	"strings"
 	"testing"
 )
@@ -21,8 +22,9 @@ func clearSpawnerEnv(t *testing.T) {
 func TestRun_PrintsRuntimeErrors(t *testing.T) {
 	clearSpawnerEnv(t)
 	dir := t.TempDir()
+	chdir(t, dir)
 	var stdout, stderr bytes.Buffer
-	err := run([]string{"create", "--repo-dir", dir}, &stdout, &stderr)
+	err := run([]string{"create", "--repo-dir", dir}, strings.NewReader(""), &stdout, &stderr)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -39,7 +41,7 @@ func TestRun_PrintsErrorsEvenWhenQuiet(t *testing.T) {
 	clearSpawnerEnv(t)
 	dir := t.TempDir()
 	var stdout, stderr bytes.Buffer
-	err := run([]string{"list", "--repo-dir", dir, "--format", "bogus", "--quiet"}, &stdout, &stderr)
+	err := run([]string{"list", "--repo-dir", dir, "--format", "bogus", "--quiet"}, strings.NewReader(""), &stdout, &stderr)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -52,7 +54,7 @@ func TestRun_PrintsErrorsEvenWhenQuiet(t *testing.T) {
 func TestRun_UnknownSubcommandNotDuplicated(t *testing.T) {
 	clearSpawnerEnv(t)
 	var stdout, stderr bytes.Buffer
-	err := run([]string{"bogus"}, &stdout, &stderr)
+	err := run([]string{"bogus"}, strings.NewReader(""), &stdout, &stderr)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -71,7 +73,7 @@ func TestRun_UnknownSubcommandNotDuplicated(t *testing.T) {
 func TestRun_MissingSubcommandPrintsError(t *testing.T) {
 	clearSpawnerEnv(t)
 	var stdout, stderr bytes.Buffer
-	err := run(nil, &stdout, &stderr)
+	err := run(nil, strings.NewReader(""), &stdout, &stderr)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -84,7 +86,7 @@ func TestRun_FlagErrorNotDuplicated(t *testing.T) {
 	clearSpawnerEnv(t)
 	dir := t.TempDir()
 	var stdout, stderr bytes.Buffer
-	err := run([]string{"create", "--repo-dir", dir, "--nope"}, &stdout, &stderr)
+	err := run([]string{"create", "--repo-dir", dir, "--nope"}, strings.NewReader(""), &stdout, &stderr)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -98,4 +100,18 @@ func TestRun_FlagErrorNotDuplicated(t *testing.T) {
 	if strings.Contains(msg, "runner-spawner: flag provided") {
 		t.Fatalf("stderr = %q, central print must not duplicate the flag package error", msg)
 	}
+}
+
+// chdir switches the process working directory for the duration of the test.
+// Package tests are sequential; t.Chdir is unavailable in go 1.23.
+func chdir(t *testing.T, dir string) {
+	t.Helper()
+	old, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(old) })
 }
