@@ -1,0 +1,61 @@
+name: CI
+
+# This repository is the tool that provisions self-hosted runners — CI
+# runs on those, not on GitHub-hosted compute.
+#
+# Jobs require self-hosted runners registered to this repo carrying the
+# labels [self-hosted, macos] and [self-hosted, windows]. The tool's
+# auto-labels (self-hosted,<os>,<arch>,<host>,<host>-<name>) already
+# include these. Create them with:
+#
+#   runner-spawner create --owner fordaj --repo runner-spawner --name ci-macos
+#   runner-spawner create --owner fordaj --repo runner-spawner --name ci-windows
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  test-macos:
+    name: test (macOS)
+    runs-on: [self-hosted, macos]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+      - run: go vet ./...
+      - run: gofmt -l . && test -z "$(gofmt -l .)"
+      - run: go test ./...
+      - run: ./ci/format_check.bash
+
+  test-windows:
+    name: test (Windows)
+    runs-on: [self-hosted, windows]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go vet ./...
+      - run: gofmt -l . && test -z "$(gofmt -l .)"
+      - run: go test ./...
+
+  cross-compile:
+    name: cross-compile (linux)
+    # Linux is not a supported runtime target (mutating verbs refuse), but
+    # the bundle cross-compiles for it — keep that green.
+    runs-on: [self-hosted, macos]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: GOOS=linux GOARCH=amd64 go build ./...
+      - run: GOOS=linux GOARCH=arm64 go build ./...
