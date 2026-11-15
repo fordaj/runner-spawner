@@ -150,12 +150,26 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  list     List runners (config names + on-disk dirs)")
 	fmt.Fprintln(w, "  init     Write a .runner-spawner.json for this repository")
 	fmt.Fprintln(w, "")
+	fmt.Fprintln(w, "Scopes (--scope; list, status, start, stop):")
+	fmt.Fprintln(w, "  directory  (default) only the runners in the configured --runners-dir")
+	fmt.Fprintln(w, "  repo       all runners of the current repository, incl. other working directories")
+	fmt.Fprintln(w, "  pc         all runner-spawner-managed installations on this machine")
+	fmt.Fprintln(w, "  org        (status only, read-only) GitHub runners registered to an organization")
+	fmt.Fprintln(w, "  owner      (status only, read-only) GitHub runners across repos of an account/org")
+	fmt.Fprintln(w, "GitHub inventory via `status --scope repo|org|owner` is always read-only.")
+	fmt.Fprintln(w, "Examples: runner-spawner list --scope pc")
+	fmt.Fprintln(w, "          runner-spawner status --scope org --org fordaj")
+	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Global flags (accepted by every subcommand):")
 	fmt.Fprintln(w, "  --config PATH        path to .runner-spawner.json (auto-discovered by default)")
 	fmt.Fprintln(w, "  --repo-dir DIR       target repository directory (default: .)")
 	fmt.Fprintln(w, "  --owner OWNER        GitHub owner (default: .runner-spawner.json / git remote)")
 	fmt.Fprintln(w, "  --repo REPO          GitHub repository (default: .runner-spawner.json / git remote)")
 	fmt.Fprintln(w, "  --name NAME          runner name (repeatable/comma-separated; default: config names)")
+	fmt.Fprintln(w, "  --scope SCOPE        list,status,start,stop: directory|repo|pc (default: directory);")
+	fmt.Fprintln(w, "                       status also: org|owner (GitHub inventory, read-only)")
+	fmt.Fprintln(w, "  --org ORG            GitHub organization (status --scope org)")
+	fmt.Fprintln(w, "  --github             status: force GitHub inventory mode (status --scope repo)")
 	fmt.Fprintln(w, "  --runners-dir DIR    runners root (default: .runners under --repo-dir)")
 	fmt.Fprintln(w, "  --runner-group NAME  runner group (default: Default)")
 	fmt.Fprintln(w, "  --runner-version V   actions/runner version (default: 2.338.2)")
@@ -203,6 +217,9 @@ func runVerb(verb string, args []string, stdout, stderr io.Writer) error {
 	localOnlyFlag := fs.Bool("local-only", false, "remove: skip GitHub deregistration (local cleanup only)")
 	formatFlag := fs.String("format", "", "output format: text, json (default: text)")
 	quietFlag := fs.Bool("quiet", false, "suppress status logs on stderr")
+	scopeFlag := fs.String("scope", "", "scope: directory|repo|pc (default: directory); status also: org|owner (GitHub inventory, read-only)")
+	orgFlag := fs.String("org", "", "GitHub organization for status --scope org (default: owner from config/env/git remote)")
+	githubFlag := fs.Bool("github", false, "status: query GitHub instead of local service state")
 	showVersion := fs.Bool("version", false, "print tool version and exit")
 	var flagNames []string
 	fs.Var(nameFlag{names: &flagNames}, "name", "runner name (repeatable/comma-separated)")
@@ -319,6 +336,16 @@ func runVerb(verb string, args []string, stdout, stderr io.Writer) error {
 		cfg.Quiet = true
 	}
 
+	// Resolve the scope and mode of this invocation before doing any
+	// work. In GitHub inventory mode cfg.Repo may be rewritten from
+	// owner/repo form. Explicit --name flags filter scoped operations;
+	// config runnerNames apply to the default directory scope only.
+	localScope, ghScope, scopeErr := resolveScope(verb, *scopeFlag, *orgFlag, *githubFlag, cfg)
+	if scopeErr != nil {
+		return scopeErr
+	}
+
+	// Format-only validation, then resolve names.
 	switch cfg.Format {
 	case "text", "json":
 	default:
@@ -327,110 +354,195 @@ func runVerb(verb string, args []string, stdout, stderr io.Writer) error {
 
 	p := currentPlatform()
 	names := cfg.ResolveNames(flagNames)
+	if localScope != "directory" {
+		names = flagNames
+	}
 
 	needRepo := verb == "create" || verb == "remove"
 	if err := cfg.Validate(needRepo, names); err != nil {
 		return configErrf("%v", err)
 	}
 
+	if ghScope != "" {
+		return runInventory(cfg, ghScope, *orgFlag, stdout, stderr)
+	}
+
+	repoFull := repoFullName(cfg)
 	switch verb {
 	case "list":
-		all, err := listNames(cfg)
+		if localScope == "directory" {
+			all, err := listNames(cfg)
+			if err != nil {
+				return err
+			}
+			if len(all) == 0 {
+				return fmt.Errorf("no runners found (pass --name, add runnerNames to %s, or check --runners-dir)", DefaultConfigFile)
+			}
+			var out []runnerStatus
+			for _, n := range all {
+				st, err := statusOne(cfg, p, n)
+				if err != nil {
+					return err
+				}
+				out = append(out, st)
+			}
+			return writeStatus(stdout, cfg, "directory", out)
+		}
+		targets, warnings, err := discoveredTargets(cfg, p, localScope, nil)
+		printWarnings(warnings, stderr)
 		if err != nil {
 			return err
 		}
-		if len(all) == 0 {
-			return fmt.Errorf("no runners found (pass --name, add runnerNames to %s, or check --runners-dir)", DefaultConfigFile)
-		}
 		var out []runnerStatus
-		for _, n := range all {
-			st, err := statusOne(cfg, p, n)
+		for _, t := range targets {
+			st, err := statusOne(t.cfg, p, t.name)
 			if err != nil {
 				return err
 			}
+			st.Repo = t.repo
 			out = append(out, st)
 		}
-		return writeStatus(stdout, cfg, out)
+		if len(out) == 0 {
+			if cfg.Format == "json" {
+				return writeStatus(stdout, cfg, localScope, nil)
+			}
+			fmt.Fprintf(stderr, "runner-spawner: no runner-spawner-managed installations found in scope %s\n", localScope)
+			return nil
+		}
+		return writeStatus(stdout, cfg, localScope, out)
 	case "status":
-		if len(names) == 0 {
-			return configErrf("no runner names given (pass --name or add runnerNames to %s)", DefaultConfigFile)
-		}
-		var out []runnerStatus
-		for _, n := range names {
-			st, err := statusOne(cfg, p, n)
-			if err != nil {
-				return err
+		if localScope == "directory" {
+			if len(names) == 0 {
+				return configErrf("no runner names given (pass --name or add runnerNames to %s)", DefaultConfigFile)
 			}
-			out = append(out, st)
-		}
-		return writeStatus(stdout, cfg, out)
-	default:
-		if len(names) == 0 {
-			return configErrf("no runner names given (pass --name or add runnerNames to %s)", DefaultConfigFile)
-		}
-		var results []mutationResult
-		for _, n := range names {
-			var err error
-			switch verb {
-			case "create":
-				err = createOne(cfg, p, n, stdout, stderr)
-			case "remove":
-				err = removeOne(cfg, p, n, stdout, stderr)
-			case "start":
-				err = startOne(cfg, p, n, stdout, stderr)
-			case "stop":
-				err = stopOne(cfg, p, n, stdout, stderr)
-			}
-			if err != nil {
-				if cfg.Format == "json" {
-					results = append(results, mutationResult{Name: n, OK: false, Error: err.Error()})
-					_ = writeMutationJSON(stdout, cfg, results)
+			var out []runnerStatus
+			for _, n := range names {
+				st, err := statusOne(cfg, p, n)
+				if err != nil {
+					return err
 				}
-				return err
+				out = append(out, st)
+			}
+			return writeStatus(stdout, cfg, "directory", out)
+		}
+		targets, warnings, err := discoveredTargets(cfg, p, localScope, flagNames)
+		printWarnings(warnings, stderr)
+		if err != nil {
+			return err
+		}
+		if len(targets) == 0 {
+			if len(flagNames) > 0 {
+				return configErrf("no runner-spawner-managed installations named %s found in scope %s", strings.Join(flagNames, ", "), localScope)
 			}
 			if cfg.Format == "json" {
-				results = append(results, mutationResult{Name: n, OK: true})
+				return writeStatus(stdout, cfg, localScope, nil)
+			}
+			fmt.Fprintf(stderr, "runner-spawner: no runner-spawner-managed installations found in scope %s\n", localScope)
+			return nil
+		}
+		var out []runnerStatus
+		for _, t := range targets {
+			st, err := statusOne(t.cfg, p, t.name)
+			if err != nil {
+				return err
+			}
+			st.Repo = t.repo
+			out = append(out, st)
+		}
+		return writeStatus(stdout, cfg, localScope, out)
+	default: // create / remove / start / stop
+		directoryScope := localScope == "directory"
+		var targets []mutationTarget
+		if directoryScope {
+			for _, n := range names {
+				targets = append(targets, mutationTarget{cfg: cfg, name: n, repo: repoFull})
+			}
+		} else {
+			var warnings []string
+			var err error
+			targets, warnings, err = discoveredTargets(cfg, p, localScope, flagNames)
+			printWarnings(warnings, stderr)
+			if err != nil {
+				return err
 			}
 		}
-		if cfg.Format == "json" {
-			return writeMutationJSON(stdout, cfg, results)
+		dispatch := func(t mutationTarget, stdout, stderr io.Writer) error {
+			switch verb {
+			case "create":
+				return createOne(t.cfg, p, t.name, stdout, stderr)
+			case "remove":
+				return removeOne(t.cfg, p, t.name, stdout, stderr)
+			case "start":
+				return startOne(t.cfg, p, t.name, stdout, stderr)
+			case "stop":
+				return stopOne(t.cfg, p, t.name, stdout, stderr)
+			}
+			return nil
 		}
-		return nil
+		return runBatch(verb, cfg, localScope, targets, len(flagNames) > 0, directoryScope, dispatch, stdout, stderr)
 	}
+}
+
+// repoFullName renders cfg's owner/repo as "owner/repo", or "" when unknown.
+func repoFullName(cfg *Config) string {
+	if cfg.Owner == "" || cfg.Repo == "" {
+		return ""
+	}
+	return cfg.Owner + "/" + cfg.Repo
 }
 
 // mutationResult is one entry of the --format json output of the mutating
 // verbs (create/remove/start/stop).
 type mutationResult struct {
 	Name  string `json:"name"`
+	Repo  string `json:"repo,omitempty"`
 	OK    bool   `json:"ok"`
 	Error string `json:"error,omitempty"`
 }
 
-func writeMutationJSON(w io.Writer, cfg *Config, results []mutationResult) error {
+func writeMutationJSON(w io.Writer, cfg *Config, scope string, results []mutationResult) error {
 	if results == nil {
 		results = []mutationResult{}
 	}
+	if scope == "" {
+		scope = "directory"
+	}
+	out := map[string]any{
+		"scope":   scope,
+		"results": results,
+	}
+	// The classic "repo" key stays for directory scope (compatibility).
+	if scope == "directory" {
+		out["repo"] = cfg.Owner + "/" + cfg.Repo
+	}
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
-	return enc.Encode(map[string]any{
-		"repo":    cfg.Owner + "/" + cfg.Repo,
-		"results": results,
-	})
+	return enc.Encode(out)
 }
 
-func writeStatus(w io.Writer, cfg *Config, out []runnerStatus) error {
+func writeStatus(w io.Writer, cfg *Config, scope string, out []runnerStatus) error {
+	if out == nil {
+		out = []runnerStatus{}
+	}
 	if cfg.Format == "json" {
+		m := map[string]any{
+			"scope":   scope,
+			"runners": out,
+		}
+		if scope == "directory" {
+			m["repo"] = cfg.Owner + "/" + cfg.Repo
+		}
 		enc := json.NewEncoder(w)
 		enc.SetIndent("", "  ")
-		return enc.Encode(map[string]any{
-			"repo":    cfg.Owner + "/" + cfg.Repo,
-			"runners": out,
-		})
+		return enc.Encode(m)
 	}
 	for _, st := range out {
-		fmt.Fprintf(w, "%s  %s  configured=%v  service=%s  %s",
-			st.Name, st.Display, st.Configured, st.ServiceState, st.Dir)
+		fmt.Fprintf(w, "%s  %s", st.Name, st.Display)
+		if st.Repo != "" {
+			fmt.Fprintf(w, "  repo=%s", st.Repo)
+		}
+		fmt.Fprintf(w, "  configured=%v  service=%s  %s",
+			st.Configured, st.ServiceState, st.Dir)
 		if st.Hint != "" {
 			fmt.Fprintf(w, "  hint: %s", st.Hint)
 		}
