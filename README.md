@@ -25,14 +25,52 @@ For each runner name, `create` resolves the target repo (see
 [Configuration](#configuration)), downloads the pinned
 `actions/runner` release for the host (`GOOS`/`GOARCH`) into
 `<runnersDir>/cache/` (first run only), extracts it into
-`<runnersDir>/<name>/`, runs `config.sh`/`config.cmd` with
-`--unattended --labels <auto> --name <host>-<name> --replace`, and
-installs/starts the service (`svc.sh` on macOS, `--runasservice` +
-`sc.exe` on Windows). `remove` stops + uninstalls the service first,
-then runs `config.sh remove`, then deletes the directory — removing a
-running runner can no longer fail partway through. `start`/`stop` are
-status-aware and idempotent, and `status`/`list` report
-`configured` + service state without mutating anything.
+`<runnersDir>/<name>/` atomically (staging dir + rename), runs
+`config.sh`/`config.cmd` with `--unattended --labels <auto> --name
+<host>-<name> --replace`, and installs/starts the service (`svc.sh`
+on macOS, `--runasservice` + `sc.exe` on Windows). `remove` stops the
+service and waits for it to settle, uninstalls it (verifying it's
+really gone), deregisters from GitHub, then deletes the directory.
+`start`/`stop` are status-aware and idempotent, and `status`/`list`
+report `configured` + service state plus a **remediation hint** for
+anything unhealthy without mutating anything.
+
+### Resuming after an interruption
+
+Every verb is designed to converge from **any** partial state: just
+re-run the same command. State is detected from disk (the runner dir,
+its `.runner` file, and a `.runner-spawner.version` marker) plus a
+service probe — never from a journal file. `create` therefore:
+
+- re-extracts atomically when the install is missing, empty, or
+  partial (e.g. the download was interrupted) — stale files from an
+  older runner version never survive;
+- skips `config.sh` when the runner is already configured (the classic
+  interruption between `config.sh` and `svc.sh install`, issue #3) and
+  just installs + starts the service;
+- starts an installed-but-stopped service instead of reinstalling;
+- no-ops on an already-running runner.
+
+`remove` does the same in reverse: it waits for the service to stop,
+handles already-stopped/already-uninstalled states, tolerates an empty
+or partial runner dir (deleting it after a best-effort remote
+deregistration), and completes a previously failed GitHub
+deregistration on re-run — falling back to the admin API when the
+dir is gone. If deregistration is impossible (no token, network down,
+or the runner is already gone → 404), the **local** removal still
+proceeds and the output says exactly what may remain on GitHub — or
+pass `--local-only` to skip GitHub entirely.
+
+Mutating verbs on the same runner are serialized with a per-runner
+lock file (`<runnersDir>/.locks/<name>.lock`). An interrupted run
+cannot wedge a runner: a lock older than 15 minutes is taken over
+automatically (on Unix it is also taken over when the owning process
+is gone).
+
+Post-conditions are verified before success is reported: after
+`create`, `.runner` exists and the service reports running; after
+`remove`, the directory and the service are gone. Errors name the
+failed step and the exact command to re-run.
 
 The token comes from `--token` >
 `RUNNER_SPAWNER_TOKEN` > `GH_TOKEN`/`GITHUB_TOKEN` > `gh api
@@ -120,9 +158,24 @@ detection (owner/repo only), `.runner-spawner.json`,
   (`git@github.com:owner/repo.git`, `https://…`, `ssh://…`).
 - Passwords: prefer env vars / interactive prompt over flags (they
   appear in process lists). The interactive prompt asks for the
-  _Windows service account_ the runner service runs as.
-- Output: `--format json` (`status`/`list`); `--dry-run` prints
+  _Windows service account_ the runner service runs as. On Windows the
+  password is passed to `config.cmd` as an argument, so it is briefly
+  visible to other processes on the machine while it runs — this is a
+  residual exposure of the runner's `--runasservice` mechanism, not
+  something the tool can fully eliminate. The password is never
+  written to `.runner-spawner.json`, never printed, and never included
+  in `--format json` output or dry-run output.
+- Output: `--format json` (`status`/`list`, and structured per-runner
+  results for `create`/`remove`/`start`/`stop`); `--dry-run` prints
   commands without executing; `--quiet` suppresses stderr progress.
+- `--local-only` (`remove` only): skip GitHub deregistration and
+  remove locally; use when GitHub is unreachable or the runner was
+  already deregistered. Without it, a missing token is a warning, not
+  a hard failure — local removal proceeds and the output names the
+  remaining GitHub-side cleanup (if any).
+- Locks: mutating verbs take `<runnersDir>/.locks/<name>.lock`
+  (stale after 15 min) so concurrent or interrupted runs cannot
+  interleave.
 - Exit codes: `0` success, `1` runtime error, `2` bad flags/config.
 
 ## Platforms
@@ -133,9 +186,20 @@ explicit unsupported error for the mutating verbs; the binary is still
 cross-compiled for Linux so the bundle layout stays uniform.
 
 Windows requires an elevated prompt (checked via `net session`, like
-the old `_admin_check.sh`). macOS service ops run as the current user
-via the runner's `svc.sh` and each requires confirmation on first use
-(LaunchAgent load prompts).
+the old `_admin_check.sh`; the check is exit-code based and therefore
+locale-independent). Service state is read from the numeric `STATE`
+code in `sc.exe query` output (1 = stopped, 2/3/5/6 = pending, 4 =
+running, 7 = paused) which is stable across localized Windows builds;
+`sc.exe stop`/`delete` pending states are waited out with bounded
+polling (and a 404-class "service does not exist" is tolerated).
+`net session`, `sc.exe` and the numeric-state parsing were verified
+to be locale-independent; the only remaining substring match is a
+documented English fallback in `sc.exe query` parsing. macOS uses the
+runner's `svc.sh` plus the LaunchAgent plist's existence as the
+installed/not-installed signal (svc.sh's status output text varies
+between runner versions). macOS service ops run as the current user
+via the runner's `svc.sh` and each requires confirmation on first
+use (LaunchAgent load prompts).
 
 ## Development
 
@@ -145,6 +209,12 @@ make build|test|vet|cross   # `cross` emits dist/<goos>-<goarch>/
 ./format.bash               # format: prettier + goimports + shfmt
 ./ci/format_check.bash      # check formatting without modifying (CI)
 ```
+
+`go test ./...` runs fully offline: lifecycle/crash-resume tests use
+a fake executor (`fake_exec_test.go`) that records every
+`svc.sh`/`config.sh`/`sc.exe`/`gh` invocation and simulates
+`.runner`/service state, so the whole create/remove state matrix is
+covered without network or real services.
 
 Formatting is delegated to
 [formattington](https://github.com/fordaj/formattington) via
@@ -191,14 +261,32 @@ The Go module (`github.com/fordaj/runner-spawner`), the
 `RUNNER_SPAWNER_REPO` default, and the bundle paths all use the new
 name.
 
+## CI
+
+`.github/workflows/ci.yml` runs `go vet ./...`, `go test ./...` and
+the format checks on **self-hosted runners only** (this repo is the
+tool that provisions them — no GitHub-hosted compute). Jobs target
+`runs-on: [self-hosted, macos]` / `[self-hosted, windows]`; create
+the runners with this tool itself. On this repo:
+
+```bash
+runner-spawner create --repo-dir <repo> --owner fordaj --repo runner-spawner --name ci-macos
+runner-spawner create --repo-dir <repo> --owner fordaj --repo runner-spawner --name ci-windows
+```
+
+(Any labels matching `[self-hosted, macos]` / `[self-hosted, windows]`
+work; the tool's auto-labels already include `self-hosted` + the OS.)
+The workflow is `pull_request`- and `push`-triggered and covers both
+architectures where the runner image allows.
+
 ## Not yet done
 
 - Linux service support (systemd/`svc.sh` semantics differ; v1
   supports macOS + Windows only).
 - `.runner-spawner.json` schema validation beyond unknown-key
   rejection (no `runnerGroup` existence check against the GitHub API).
-- Concurrent `create`/`remove` (verbs run sequentially, like the old
-  `create_all_runners.sh` loop).
+- Integrity checking of the downloaded actions/runner archive (see
+  the follow-up issue filed from #5).
 
 ## History
 
