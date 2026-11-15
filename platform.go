@@ -28,15 +28,22 @@ type platform struct {
 	// OSLabel / ArchLabel are the Actions labels (e.g. macos, x64).
 	OSLabel   string
 	ArchLabel string
+
+	hostname string // captured by platformFor; used by Labels
 }
 
-func currentPlatform() platform {
+// currentPlatform detects the host platform. It is a var so tests can
+// simulate any host OS (the command seam in script.go fakes the scripts
+// themselves).
+var currentPlatform = func() platform {
 	return platformFor(runtime.GOOS, runtime.GOARCH, hostname())
 }
 
 func platformFor(goos, goarch, hostname string) platform {
-	p := platform{GOOS: goos, GOARCH: goarch}
-	_ = hostname
+	p := platform{GOOS: goos, GOARCH: goarch, hostname: strings.TrimSpace(hostname)}
+	if p.hostname == "" {
+		p.hostname = "host"
+	}
 	switch goos {
 	case "darwin":
 		switch goarch {
@@ -77,7 +84,10 @@ func (p platform) Labels(cfg *Config, name string) []string {
 	if len(cfg.Labels) > 0 {
 		return append([]string(nil), cfg.Labels...)
 	}
-	host := hostname()
+	host := p.hostname
+	if host == "" {
+		host = hostname()
+	}
 	return []string{"self-hosted", p.OSLabel, p.ArchLabel, host, host + "-" + name}
 }
 

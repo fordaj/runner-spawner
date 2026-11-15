@@ -711,6 +711,9 @@ func TestDryRunPasswordNeverPrinted(t *testing.T) {
 func TestCreateFormatJSON(t *testing.T) {
 	fx := newLifecycleFixture(t, "darwin")
 	fx.cfg.Format = "json"
+	prevPlatform := currentPlatform
+	currentPlatform = func() platform { return fx.plat }
+	t.Cleanup(func() { currentPlatform = prevPlatform })
 	code := func() error {
 		return runVerb("create", []string{
 			"--repo-dir", fx.cfg.RepoDir,

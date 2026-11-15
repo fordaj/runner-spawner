@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -87,12 +88,13 @@ func TestExtractTarGz_DotPrefix(t *testing.T) {
 	if string(got) != "binary" {
 		t.Fatalf("bin/runner = %q, want %q", got, "binary")
 	}
-	// Executable bit must survive.
+	// Executable bit must survive (Windows has no exec-bit on files —
+	// os.Chmod only toggles the read-only flag — so only assert it on Unix).
 	fi, err := os.Stat(filepath.Join(dst, "safe_sleep.sh"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if fi.Mode().Perm()&0o100 == 0 {
+	if runtime.GOOS != "windows" && fi.Mode().Perm()&0o100 == 0 {
 		t.Fatalf("safe_sleep.sh mode = %o, want executable bit set", fi.Mode().Perm())
 	}
 }
