@@ -10,3 +10,7 @@
 # tooling (uv)
 .venv/
 .logs/
+
+# cross-compiled binaries from `go build` (use make cross for dist/)
+/runner-spawner.exe
+/runner-spawner-*
