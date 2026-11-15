@@ -1,17 +1,13 @@
 #!/usr/bin/env bash
-# update.bash — refresh bundled runner-spawner binaries from releases.
+# update.bash — refresh bundled runner-spawner binaries from fordaj/runner-spawner releases.
 #
 # Downloads the latest release's per-platform executables via gh, verifies
-# SHA256 checksums, extracts each binary into
-# tools/runner-spawner/<tag>/<platform>/ (platform matches
-# get_platform_dir(): macos/linux/windows + x86_64/arm64, so darwin-amd64
-# -> macos-x86_64, etc.), and deletes old version folders. Only the binary
-# is kept; docs (README.md, runner-spawner.example.json) are discarded.
-# Old v*/ folders are deleted only after the new version is fully staged,
-# so a failed download leaves the previous bundle intact.
-#
-# The GitHub repository is fordaj/runner-spawner (renamed from
-# fordaj/GithubActions).
+# SHA256 checksums, extracts each binary into tools/runner-spawner/<tag>/<platform>/
+# (platform is the bundled <os>-<arch> layout: macos/linux/windows +
+# x86_64/arm64, so darwin-amd64 -> macos-x86_64, etc.), and deletes old version folders.
+# Only the binary is kept; docs (README.md, *.example.json) are
+# discarded. Old v*/ folders are deleted only after the new version is
+# fully staged, so a failed download leaves the previous bundle intact.
 #
 # Usage:
 #   tools/runner-spawner/update.bash              # download latest, replace old versions
@@ -24,20 +20,23 @@
 # log <level> <message> from scripts/env.sh (logamuffin, with printf
 # fallback until tools/logamuffin is populated).
 #
-# Layout after a successful run (example for v0.0.1.0.1):
+# Layout after a successful run (example for v0.0.1.0.4):
 #   tools/runner-spawner/
 #     update.bash
-#     v0.0.1.0.1/
+#     v0.0.1.0.4/
 #       macos-arm64/runner-spawner
 #       macos-x86_64/runner-spawner
 #       linux-arm64/runner-spawner
 #       linux-x86_64/runner-spawner
-#       windows-x86_64/runner-spawner.exe
 #       windows-arm64/runner-spawner.exe
+#       windows-x86_64/runner-spawner.exe
 #
 # Env:
-#   RUNNER_SPAWNER_REPO  Repository slug (default: fordaj/runner-spawner)
-#   RUNNER_SPAWNER_TAG   Pinned tag (default: latest release)
+#   RUNNER_SPAWNER_UPSTREAM_REPO  Repository slug (default: fordaj/runner-spawner)
+#   RUNNER_SPAWNER_TAG            Pinned tag (default: latest release)
+#   RUNNER_SPAWNER_REPO is the runner-spawner binary's target-repo env
+#   (e.g. `formattington`), not the upstream slug; this script does not
+#   use it (scripts/env.sh exports RUNNER_SPAWNER_UPSTREAM_REPO instead).
 
 set -euo pipefail
 
@@ -55,15 +54,15 @@ fi
 
 DRY_RUN=0
 TAG="${RUNNER_SPAWNER_TAG:-}"
-REPO="${RUNNER_SPAWNER_REPO:-fordaj/runner-spawner}"
+REPO="${RUNNER_SPAWNER_UPSTREAM_REPO:-fordaj/runner-spawner}"
 
 usage() {
     cat <<'EOF'
 Usage: tools/runner-spawner/update.bash [--dry-run] [--tag TAG] [--repo REPO]
 
 Download the latest RunnerSpawner release from GitHub via gh, extract each
-platform binary into tools/runner-spawner/<tag>/<platform>/ (platform matches
-get_platform_dir(), e.g. darwin-amd64 -> macos-x86_64), and delete old
+platform binary into tools/runner-spawner/<tag>/<platform>/ (platform is the
+bundled <os>-<arch> layout, e.g. darwin-amd64 -> macos-x86_64), and delete old
 version folders. Only the binary is kept.
 
 Flags:
@@ -73,8 +72,8 @@ Flags:
   --help, -h      Show this help.
 
 Env:
-  RUNNER_SPAWNER_REPO  Repository slug (overridden by --repo).
-  RUNNER_SPAWNER_TAG   Pinned tag (overridden by --tag).
+  RUNNER_SPAWNER_UPSTREAM_REPO  Repository slug (overridden by --repo).
+  RUNNER_SPAWNER_TAG            Pinned tag (overridden by --tag).
 EOF
 }
 
@@ -163,7 +162,7 @@ fi
 log INFO "release tag: $TAG"
 
 # parse_stem_to_platform <stem> sets PLATFORM (e.g.
-# RunnerSpawner_v0.0.1.0.1_darwin-arm64 -> macos-arm64) or returns 1 for
+# RunnerSpawner_v0.0.1.0.4_darwin-arm64 -> macos-arm64) or returns 1 for
 # unknown values. Sets globals to avoid subshell-die pitfalls. Asset
 # names append _<os>-<arch> after the tag, and arch may itself contain
 # "_" (x86_64), so the suffix is matched as a whole instead of splitting
