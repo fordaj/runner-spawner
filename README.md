@@ -113,7 +113,7 @@ without touching the network or disk:
 ### First-time setup for a target repo
 
 1. Add a config file to the target repo — either copy the committed
-   [`.runner-spawner.json`](.runner-spawner.json) as a starting point, or run
+   `.runner-spawner.json` as a starting point, or run
    `runner-spawner init` inside the repo (it detects owner/repo from the git
    remote and writes the file for you):
 
@@ -455,3 +455,7 @@ dir is just `<name>` (no `$HOST` prefix); `remove` always stops the
 service before deregistering, so removing a running runner no longer
 breaks midway; and the Windows prompt now names the _Windows service
 account_ instead of a bare "account".
+
+## Documentation
+
+The repository documents itself: one sibling Markdown page per Go file, script, and tool bundle, rendered into `./site/` (git-ignored) by `scripts/docs.sh`. Start with [AGENTS.md](AGENTS.md) for the documentation layout and rules, then `scripts/docs.sh` to regenerate the site.
