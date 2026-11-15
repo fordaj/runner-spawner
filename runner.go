@@ -90,3 +90,7 @@ func macosServiceLabel(cfg *Config, name string) string {
 func macosServicePlist(homeDir string, cfg *Config, name string) string {
 	return filepath.Join(homeDir, "Library", "LaunchAgents", macosServiceLabel(cfg, name)+".plist")
 }
+
+// userHomeDir is a seam so tests can redirect LaunchAgent lookups into a
+// temp dir.
+var userHomeDir = os.UserHomeDir

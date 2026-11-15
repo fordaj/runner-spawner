@@ -1,8 +1,8 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -29,13 +29,15 @@ func runnerToken(cfg *Config) (string, error) {
 		return "", fmt.Errorf("no token provided and `gh` was not found on PATH; pass --token or set %s / GH_TOKEN (see README)", EnvToken)
 	}
 	path := fmt.Sprintf("repos/%s/%s/actions/runners/registration-token", cfg.Owner, cfg.Repo)
-	cmd := exec.CommandContext(context.Background(), "gh", "api", path, "-X", "POST", "-q", ".token")
-	out, err := cmd.Output()
+	// The gh call goes through the command seam so tests never hit the
+	// network. Combined output is fine: gh prints just the token.
+	out, err := commandExecution.Output("gh", []string{"api", path, "-X", "POST", "-q", ".token"}, "")
 	if err != nil {
-		if ee, ok := err.(*exec.ExitError); ok {
-			return "", fmt.Errorf("registration token request failed for %s/%s: %s (run `gh auth login` or pass --token)", cfg.Owner, cfg.Repo, strings.TrimSpace(string(ee.Stderr)))
+		var ec exitCoder
+		if errors.As(err, &ec) {
+			return "", fmt.Errorf("registration token request failed for %s/%s (exit %d): %s (run `gh auth login` or pass --token)", cfg.Owner, cfg.Repo, ec.ExitCode(), strings.TrimSpace(out))
 		}
-		return "", fmt.Errorf("registration token request failed for %s/%s: %w", cfg.Owner, cfg.Repo, err)
+		return "", fmt.Errorf("registration token request failed for %s/%s: %w (run `gh auth login` or pass --token)", cfg.Owner, cfg.Repo, err)
 	}
 	tok := strings.TrimSpace(string(out))
 	// gh -q .token prints the bare token; some versions print JSON.

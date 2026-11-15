@@ -55,17 +55,23 @@ type fakeExecutor struct {
 	// svcState is the simulated service state:
 	// "running", "stopped" or "not-installed" (default not-installed).
 	svcState string
-	// plistExists simulates a macOS LaunchAgent plist on disk. It is
-	// independent of svcState so tests can model "service gone but plist
-	// left behind" orphan states. When nil, the fake derives existence
-	// from svcState != "not-installed".
-	plistExists *bool
+	// plistPath, when set, is the LaunchAgent plist file the fake creates
+	// on `svc.sh install` and removes on `svc.sh uninstall`. When empty,
+	// the fake simulates service state without touching the filesystem
+	// (state machine only).
+	plistPath string
 
 	// configured tracks the simulated .runner file, persisted at
 	// <dir>/.runner so the code under test sees it via isConfigured.
 	configured map[string]bool
 
-	// Failure injection.
+	// gh CLI simulation (token minting + admin API for re-registration
+	// and deregistration when the dir is gone).
+	GitHubTokenErr    error
+	GitHubListIDs     []string
+	GitHubListErr     error
+	GitHubDeleteErr   error
+	GitHubDeleted     []string
 	FailConfig        error // config.sh/config.cmd configure step
 	CrashConfig       error // config succeeded on disk, then "crashed"
 	FailConfigRemove  error // config.sh remove step
@@ -140,7 +146,23 @@ func (f *fakeExecutor) setSvcState(s string) {
 }
 
 func baseName(name string) string {
-	return filepath.Base(name)
+	base := filepath.Base(name)
+	// Case-insensitive match for Windows .cmd scripts.
+	return base
+}
+
+func (f *fakeExecutor) writePlist(v bool) {
+	if f.plistPath == "" {
+		return
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if v {
+		_ = os.MkdirAll(filepath.Dir(f.plistPath), 0o755)
+		_ = os.WriteFile(f.plistPath, []byte("<plist></plist>"), 0o644)
+		return
+	}
+	_ = os.Remove(f.plistPath)
 }
 
 func isConfigRemove(args []string) bool {
@@ -154,29 +176,22 @@ func isConfigRemove(args []string) bool {
 
 func (f *fakeExecutor) Run(name string, args []string, dir string) error {
 	f.record(name, args, dir)
-	base := baseName(name)
-	switch base {
-	case "config.sh", "config.cmd":
-		return f.runConfig(args, dir)
-	case "svc.sh":
-		return f.runSvc(args, dir)
-	case "sc.exe":
-		return f.runSC(args)
-	case "net":
-		if f.FailNetSession != nil {
-			return f.FailNetSession
-		}
-		return nil
-	case "gh":
-		return errors.New("gh not supported by fakeExecutor")
-	default:
-		return fmt.Errorf("fakeExecutor: unexpected command %q", name)
-	}
+	_, err := f.execute(name, args, dir)
+	return err
 }
 
 func (f *fakeExecutor) Output(name string, args []string, dir string) (string, error) {
 	f.record(name, args, dir)
+	return f.execute(name, args, dir)
+}
+
+// execute is the single state-machine behind Run and Output: every
+// command applied through the executor mutates the simulated on-disk and
+// service state exactly once, regardless of whether the caller captures
+// output.
+func (f *fakeExecutor) execute(name string, args []string, dir string) (string, error) {
 	base := baseName(name)
+	base = strings.ToLower(base)
 	switch base {
 	case "config.sh", "config.cmd":
 		if err := f.runConfig(args, dir); err != nil {
@@ -184,13 +199,53 @@ func (f *fakeExecutor) Output(name string, args []string, dir string) (string, e
 		}
 		return "", nil
 	case "svc.sh":
-		return f.svcStatusOutput(dir, args)
+		return f.svcAction(args, dir)
 	case "sc.exe":
-		return f.scQueryOutput(args)
+		return f.scAction(args)
+	case "net":
+		if f.FailNetSession != nil {
+			return "", f.FailNetSession
+		}
+		return "", nil
 	case "gh":
-		return "", errors.New("gh not supported by fakeExecutor")
+		return f.runGH(args)
+	case "launchctl":
+		// launchctl unload -w <plist>: the unload itself may fail (job
+		// not loaded); the plist removal is done by the caller.
+		return "", nil
 	default:
 		return "", fmt.Errorf("fakeExecutor: unexpected command %q", name)
+	}
+}
+
+// runGH simulates the gh CLI calls runner-spawner makes: minting a
+// registration token and listing/deleting repo-scoped runners.
+func (f *fakeExecutor) runGH(args []string) (string, error) {
+	joined := strings.Join(args, " ")
+	switch {
+	case strings.Contains(joined, "registration-token"):
+		if f.GitHubTokenErr != nil {
+			return "", f.GitHubTokenErr
+		}
+		return "fake-registration-token\n", nil
+	case strings.Contains(joined, "actions/runners") && strings.Contains(joined, "DELETE"):
+		if f.GitHubDeleteErr != nil {
+			return "", f.GitHubDeleteErr
+		}
+		f.mu.Lock()
+		f.GitHubDeleted = append(f.GitHubDeleted, joined)
+		f.mu.Unlock()
+		return "", nil
+	case strings.Contains(joined, "actions/runners"):
+		if f.GitHubListErr != nil {
+			return "", f.GitHubListErr
+		}
+		f.mu.Lock()
+		ids := append([]string(nil), f.GitHubListIDs...)
+		f.mu.Unlock()
+		return strings.Join(ids, "\n") + "\n", nil
+	default:
+		return "", fmt.Errorf("fakeExecutor: unexpected gh call %q", joined)
 	}
 }
 
@@ -236,7 +291,9 @@ func (f *fakeExecutor) writeRunner(dir string, configured bool) {
 	_ = os.Remove(marker)
 }
 
-func (f *fakeExecutor) runSvc(args []string, dir string) error {
+// svcAction performs a svc.sh subcommand (state transition and/or
+// status query) and returns what the real script would print.
+func (f *fakeExecutor) svcAction(args []string, dir string) (string, error) {
 	sub := ""
 	if len(args) > 0 {
 		sub = args[0]
@@ -247,49 +304,46 @@ func (f *fakeExecutor) runSvc(args []string, dir string) error {
 	switch sub {
 	case "install":
 		if f.FailSvcInstall != nil {
-			return f.FailSvcInstall
+			return f.FailSvcInstall.Error(), f.FailSvcInstall
 		}
 		if state != "not-installed" {
-			return errors.New("svc.sh: service is already installed")
+			return "", errors.New("svc.sh: error: exists plist (service already installed)")
 		}
 		f.setSvcState("stopped")
+		f.writePlist(true)
 		if f.CrashSvcInstall != nil {
-			return f.CrashSvcInstall
+			return "", f.CrashSvcInstall
 		}
-		return nil
+		return "Creating launch runner\nsvc install complete\n", nil
 	case "start":
 		if f.FailSvcStart != nil {
-			return f.FailSvcStart
+			return f.FailSvcStart.Error(), f.FailSvcStart
 		}
 		if state == "not-installed" {
-			return errors.New("svc.sh: service is not installed")
+			return "", errors.New("svc.sh: service is not installed")
 		}
 		f.setSvcState("running")
-		return nil
+		return "", nil
 	case "stop":
 		if f.FailSvcStop != nil {
-			return f.FailSvcStop
+			return f.FailSvcStop.Error(), f.FailSvcStop
 		}
 		if state == "not-installed" {
-			return errors.New("svc.sh: service is not installed")
+			return "", errors.New("svc.sh: service is not installed")
 		}
 		f.setSvcState("stopped")
-		return nil
+		return "", nil
 	case "uninstall":
 		if f.FailSvcUninstall != nil {
-			return f.FailSvcUninstall
+			return f.FailSvcUninstall.Error(), f.FailSvcUninstall
 		}
 		f.setSvcState("not-installed")
-		return nil
+		f.writePlist(false)
+		return "", nil
 	case "status":
-		out, err := f.svcStatusOutput(dir, args)
-		if err != nil {
-			return err
-		}
-		_ = out
-		return nil
+		return f.svcStatusOutput(dir, args)
 	default:
-		return fmt.Errorf("fakeExecutor: unexpected svc.sh subcommand %q", sub)
+		return "", fmt.Errorf("fakeExecutor: unexpected svc.sh subcommand %q", sub)
 	}
 }
 
@@ -299,61 +353,64 @@ func (f *fakeExecutor) svcStatusOutput(dir string, args []string) (string, error
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	// Mirrors the real darwin svc.sh: always exits 0; prints "not
+	// installed", "Stopped" or "Started:".
 	switch f.svcState {
 	case "running":
-		return "svc.sh: service is running", nil
+		return "status actions.runner.acme-widgets.host-runner01:\n\n/tmp/actions.runner.acme-widgets.host-runner01.plist\n\nStarted:\n12345\t0\tactions.runner.acme-widgets.host-runner01\n\n", nil
 	case "stopped":
-		return "svc.sh: service is stopped", nil
+		return "status actions.runner.acme-widgets.host-runner01:\n\n/tmp/actions.runner.acme-widgets.host-runner01.plist\n\nStopped\n\n", nil
 	default:
-		return "svc.sh: service is not installed", &fakeExitError{code: 1, msg: "svc.sh: service is not installed"}
+		return "status actions.runner.acme-widgets.host-runner01:\n\nnot installed\n\n", nil
 	}
 }
 
-func (f *fakeExecutor) runSC(args []string) error {
+// scAction performs an sc.exe subcommand and returns its output.
+func (f *fakeExecutor) scAction(args []string) (string, error) {
 	sub := ""
 	if len(args) > 0 {
 		sub = strings.ToLower(args[0])
 	}
 	switch sub {
 	case "query":
-		_, err := f.scQueryOutput(args)
-		return err
+		return f.scQueryOutput(args)
 	case "stop":
 		if f.FailScStop != nil {
-			return f.FailScStop
+			return f.FailScStop.Error(), f.FailScStop
 		}
 		f.mu.Lock()
+		defer f.mu.Unlock()
 		if f.svcState == "not-installed" {
-			f.mu.Unlock()
-			return &fakeExitError{code: 1060, msg: "[SC] OpenService FAILED 1060"}
+			return "", &fakeExitError{code: 1060, msg: "[SC] OpenService FAILED 1060"}
 		}
 		if f.WindowsStopPendingCount > 0 {
 			f.stopPending = f.WindowsStopPendingCount
 			f.WindowsStopPendingCount = 0
-			f.mu.Unlock()
-			return nil
+			return "[SC] SetServiceStatus: STOP_PENDING\n", nil
 		}
 		f.svcState = "stopped"
-		f.mu.Unlock()
-		return nil
+		return "", nil
 	case "delete":
 		if f.FailScDelete != nil {
-			return f.FailScDelete
+			return f.FailScDelete.Error(), f.FailScDelete
 		}
 		f.mu.Lock()
 		defer f.mu.Unlock()
+		if f.svcState == "not-installed" {
+			return "", &fakeExitError{code: 1060, msg: "[SC] OpenService FAILED 1060"}
+		}
 		f.svcState = "not-installed"
-		return nil
+		return "", nil
 	case "start":
 		f.mu.Lock()
 		defer f.mu.Unlock()
 		if f.svcState == "not-installed" {
-			return &fakeExitError{code: 1060, msg: "[SC] OpenService FAILED 1060"}
+			return "", &fakeExitError{code: 1060, msg: "[SC] OpenService FAILED 1060"}
 		}
 		f.svcState = "running"
-		return nil
+		return "", nil
 	default:
-		return fmt.Errorf("fakeExecutor: unexpected sc.exe subcommand %q", sub)
+		return "", fmt.Errorf("fakeExecutor: unexpected sc.exe subcommand %q", sub)
 	}
 }
 
@@ -378,11 +435,4 @@ func (f *fakeExecutor) scQueryOutput(args []string) (string, error) {
 	default:
 		return "[SC] EnumQueryServicesStatus:OpenService FAILED 1060:\nThe specified service does not exist as an installed service.\n", &fakeExitError{code: 1060}
 	}
-}
-
-// setPlist controls the simulated LaunchAgent plist on disk.
-func (f *fakeExecutor) setPlist(exists bool) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.plistExists = &exists
 }

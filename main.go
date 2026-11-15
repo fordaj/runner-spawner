@@ -160,6 +160,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  --labels A,B,...     runner labels (default: auto from platform+hostname)")
 	fmt.Fprintln(w, "  --token TOKEN        registration token (default: RUNNER_SPAWNER_TOKEN / GH_TOKEN / gh)")
 	fmt.Fprintln(w, "  --dry-run            print what would happen, change nothing")
+	fmt.Fprintln(w, "  --local-only         remove: skip GitHub deregistration (local cleanup only)")
 	fmt.Fprintln(w, "  --format text|json   output format (default: text)")
 	fmt.Fprintln(w, "  --quiet              suppress status logs on stderr")
 	fmt.Fprintln(w, "")
@@ -196,6 +197,7 @@ func runVerb(verb string, args []string, stdout, stderr io.Writer) error {
 	windowsUserFlag := fs.String("windows-username", "", "Windows service account (required on Windows)")
 	windowsPassFlag := fs.String("windows-password", "", "Windows service account password (required on Windows)")
 	dryRunFlag := fs.Bool("dry-run", false, "print what would happen, change nothing")
+	localOnlyFlag := fs.Bool("local-only", false, "remove: skip GitHub deregistration (local cleanup only)")
 	formatFlag := fs.String("format", "", "output format: text, json (default: text)")
 	quietFlag := fs.Bool("quiet", false, "suppress status logs on stderr")
 	showVersion := fs.Bool("version", false, "print tool version and exit")
@@ -304,6 +306,9 @@ func runVerb(verb string, args []string, stdout, stderr io.Writer) error {
 	if *dryRunFlag {
 		cfg.DryRun = true
 	}
+	if *localOnlyFlag {
+		cfg.LocalOnly = true
+	}
 	if *formatFlag != "" {
 		cfg.Format = *formatFlag
 	}
@@ -360,24 +365,55 @@ func runVerb(verb string, args []string, stdout, stderr io.Writer) error {
 		if len(names) == 0 {
 			return configErrf("no runner names given (pass --name or add runnerNames to %s)", DefaultConfigFile)
 		}
+		var results []mutationResult
 		for _, n := range names {
 			var err error
 			switch verb {
 			case "create":
 				err = createOne(cfg, p, n, stdout, stderr)
 			case "remove":
-				err = removeOne(cfg, p, n, stderr)
+				err = removeOne(cfg, p, n, stdout, stderr)
 			case "start":
-				err = startOne(cfg, p, n, stderr)
+				err = startOne(cfg, p, n, stdout, stderr)
 			case "stop":
-				err = stopOne(cfg, p, n, stderr)
+				err = stopOne(cfg, p, n, stdout, stderr)
 			}
 			if err != nil {
+				if cfg.Format == "json" {
+					results = append(results, mutationResult{Name: n, OK: false, Error: err.Error()})
+					_ = writeMutationJSON(stdout, cfg, results)
+				}
 				return err
 			}
+			if cfg.Format == "json" {
+				results = append(results, mutationResult{Name: n, OK: true})
+			}
+		}
+		if cfg.Format == "json" {
+			return writeMutationJSON(stdout, cfg, results)
 		}
 		return nil
 	}
+}
+
+// mutationResult is one entry of the --format json output of the mutating
+// verbs (create/remove/start/stop).
+type mutationResult struct {
+	Name  string `json:"name"`
+	OK    bool   `json:"ok"`
+	Error string `json:"error,omitempty"`
+}
+
+func writeMutationJSON(w io.Writer, cfg *Config, results []mutationResult) error {
+	if results == nil {
+		results = []mutationResult{}
+	}
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	return enc.Encode(map[string]any{
+		"repo":    cfg.Owner + "/" + cfg.Repo,
+		"results": results,
+	})
 }
 
 func writeStatus(w io.Writer, cfg *Config, out []runnerStatus) error {
@@ -390,8 +426,12 @@ func writeStatus(w io.Writer, cfg *Config, out []runnerStatus) error {
 		})
 	}
 	for _, st := range out {
-		fmt.Fprintf(w, "%s  %s  configured=%v  service=%s  %s\n",
+		fmt.Fprintf(w, "%s  %s  configured=%v  service=%s  %s",
 			st.Name, st.Display, st.Configured, st.ServiceState, st.Dir)
+		if st.Hint != "" {
+			fmt.Fprintf(w, "  hint: %s", st.Hint)
+		}
+		fmt.Fprintln(w)
 	}
 	return nil
 }

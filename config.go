@@ -46,6 +46,10 @@ type Config struct {
 	Token  string `json:"-"`
 	Format string `json:"-"`
 	Quiet  bool   `json:"-"`
+	// LocalOnly skips GitHub deregistration in `remove` (local cleanup
+	// only). For when GitHub is unreachable or the runner already
+	// deregistered.
+	LocalOnly bool `json:"-"`
 }
 
 // DefaultConfig returns the built-in defaults.
