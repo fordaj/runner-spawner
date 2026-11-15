@@ -7,7 +7,7 @@
 ```text
 tools/barnacle/
   update.sh                     # refresh from fordaj/barnacle releases
-  v0.0.1.0.5/
+  v0.0.1.0.17/
     macos-arm64/barnacle
     macos-x86_64/barnacle
     linux-arm64/barnacle
@@ -16,7 +16,7 @@ tools/barnacle/
     windows-x86_64/barnacle.exe
 ```
 
-All six platforms are bundled. The pinned v0.0.1.0.5 bundle in this repository currently carries only the binaries (no `LICENSE` files in the tree).
+All six platforms are bundled. The pinned v0.0.1.0.17 bundle in this repository currently carries only the binaries (no `LICENSE` files in the tree).
 
 ## `update.sh` in detail
 
