@@ -285,8 +285,7 @@ architectures where the runner image allows.
   supports macOS + Windows only).
 - `.runner-spawner.json` schema validation beyond unknown-key
   rejection (no `runnerGroup` existence check against the GitHub API).
-- Integrity checking of the downloaded actions/runner archive (see
-  the follow-up issue filed from #5).
+- Integrity checking of the downloaded actions/runner archive (#6).
 
 ## History
 
