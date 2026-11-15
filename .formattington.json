@@ -1,0 +1,16 @@
+{
+  "commands": [
+    ["prettier"],
+    ["goimports"],
+    [
+      "shfmt",
+      "-i",
+      "4",
+      "format.bash",
+      "release.bash",
+      "ci/format_check.bash",
+      "scripts/entry.sh",
+      "scripts/version.bash"
+    ]
+  ]
+}

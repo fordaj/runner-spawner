@@ -1,0 +1,49 @@
+name: CI
+
+# This repository is the tool that provisions self-hosted runners — CI
+# runs exclusively on self-hosted runners (no GitHub-hosted compute,
+# and no Linux job).
+#
+# Jobs require self-hosted runners registered to this repo carrying the
+# labels [self-hosted, macos] and [self-hosted, windows]. The tool's
+# auto-labels (self-hosted,<os>,<arch>,<host>,<host>-<name>) already
+# include these. Create them with:
+#
+#   runner-spawner create --owner fordaj --repo runner-spawner --name ci-macos
+#   runner-spawner create --owner fordaj --repo runner-spawner --name ci-windows
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  test-macos:
+    name: test (macOS)
+    runs-on: [self-hosted, macos]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+      - run: go vet ./...
+      - run: gofmt -l . && test -z "$(gofmt -l .)"
+      - run: go test ./...
+      - run: ./ci/format_check.bash
+
+  test-windows:
+    name: test (Windows)
+    runs-on: [self-hosted, windows]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go vet ./...
+      - run: gofmt -l . && test -z "$(gofmt -l .)"
+      - run: go test ./...
