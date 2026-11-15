@@ -224,7 +224,10 @@ Formatting is delegated to
 [formattington](https://github.com/fordaj/formattington) via
 `./format.bash` / `./ci/format_check.bash`. Scope (`.formattington.json`):
 `*.md`/`*.json` → `prettier`, `*.go` → `goimports` (gofmt + import
-fixing), `*.sh`/`*.bash` → `shfmt -i 4`. Formattington is pinned in
+fixing), `*.sh`/`*.bash` → `shfmt -i 4` (with `scripts/env.sh`
+excluded: it intentionally contains zsh-only syntax that no
+bash-compatible parser can read, so `shfmt` is pointed at the other
+shell files explicitly). Formattington is pinned in
 `pyproject.toml` (`dbed7479…`, the first commit with Go support) and
 locked in `uv.lock`; `uv run` creates `.venv/` automatically. Style is
 configured by `.prettierrc`. Prerequisites (`uv`, Go with
@@ -269,7 +272,8 @@ name.
 
 `.github/workflows/ci.yml` runs `go vet ./...`, `go test ./...` and
 the format checks on **self-hosted runners only** (this repo is the
-tool that provisions them — no GitHub-hosted compute). Jobs target
+tool that provisions them — no GitHub-hosted compute, and no Linux
+job). Jobs target
 `runs-on: [self-hosted, macos]` / `[self-hosted, windows]`; create
 the runners with this tool itself. On this repo:
 
@@ -293,7 +297,7 @@ architectures where the runner image allows.
 - GitHub-side orphan registrations (runner registered on GitHub, local
   dir deleted) are not visible to `status`/`list` — that needs an
   authenticated API call. Re-running `runner-spawner remove --name
-  <name>` completes the job (a second run deregisters via the admin
+<name>` completes the job (a second run deregisters via the admin
   API when the dir is already gone).
 - A hostname change orphans the previous service registration
   (`displayName` is `hostname-name`); `create` will register a new
