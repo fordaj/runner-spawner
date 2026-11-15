@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -35,8 +36,8 @@ import (
 // directory it cannot identify.
 
 const (
-	installMarkerFile = ".runner-spawner-install.json"
-	installTool       = "runner-spawner"
+	installMarkerFile  = ".runner-spawner-install.json"
+	installTool        = "runner-spawner"
 	installMetaVersion = 1
 
 	registryDirName  = "runner-spawner"
@@ -162,7 +163,7 @@ func readInstallMarker(dir string) (InstallationMeta, error) {
 	if meta.Name == "" {
 		return InstallationMeta{}, fmt.Errorf("%s: missing runner name", installMarkerFile)
 	}
-	if filepath.Clean(meta.InstallationDir) != filepath.Clean(dir) {
+	if !pathEqual(meta.InstallationDir, dir) {
 		return InstallationMeta{}, fmt.Errorf("%s: installation dir %q does not match %q", installMarkerFile, meta.InstallationDir, dir)
 	}
 	if meta.Name != filepath.Base(filepath.Clean(dir)) {
@@ -274,7 +275,7 @@ func registerInstallation(meta InstallationMeta) error {
 		}
 		found := false
 		for i, m := range reg.Installations {
-			if filepath.Clean(m.InstallationDir) == meta.InstallationDir {
+			if pathEqual(m.InstallationDir, meta.InstallationDir) {
 				// Preserve the original creation timestamp.
 				if meta.CreatedAt == "" {
 					meta.CreatedAt = m.CreatedAt
@@ -308,7 +309,7 @@ func unregisterInstallation(dir string) error {
 		}
 		kept := reg.Installations[:0]
 		for _, m := range reg.Installations {
-			if filepath.Clean(m.InstallationDir) != clean {
+			if !pathEqual(m.InstallationDir, clean) {
 				kept = append(kept, m)
 			}
 		}
@@ -326,14 +327,27 @@ type discoveredRunner struct {
 }
 
 // repoFullNamesEqual compares two owner/repo strings case-insensitively.
-func repoFullNamesEqual(a, b string) bool { return strings.EqualFold(strings.TrimSpace(a), strings.TrimSpace(b)) }
+func repoFullNamesEqual(a, b string) bool {
+	return strings.EqualFold(strings.TrimSpace(a), strings.TrimSpace(b))
+}
+
+// pathEqual compares two filesystem paths. Case-insensitive on Windows,
+// exact otherwise (Linux filesystems may be case-sensitive).
+func pathEqual(a, b string) bool {
+	a = filepath.Clean(a)
+	b = filepath.Clean(b)
+	if runtime.GOOS == "windows" {
+		return strings.EqualFold(a, b)
+	}
+	return a == b
+}
 
 // repoMatches reports whether an installation belongs to the repo this
 // command was invoked for. Match by canonical repo dir first (works even
 // without a git remote), then by owner/repo full name.
 func repoMatches(cfg *Config, m InstallationMeta) bool {
 	if cfgAbs, err := cfg.AbsRepoDir(); err == nil {
-		if filepath.Clean(m.RepoDir) == filepath.Clean(cfgAbs) {
+		if pathEqual(m.RepoDir, cfgAbs) {
 			return true
 		}
 	}
@@ -371,7 +385,7 @@ func validRegistryEntry(m InstallationMeta) (InstallationMeta, string, bool) {
 	if err != nil {
 		return InstallationMeta{}, fmt.Sprintf("registry entry %q skipped: %v", dir, err), false
 	}
-	if !strings.EqualFold(marker.Name, m.Name) || filepath.Clean(marker.RepoDir) != filepath.Clean(m.RepoDir) {
+	if !strings.EqualFold(marker.Name, m.Name) || !pathEqual(marker.RepoDir, m.RepoDir) {
 		return InstallationMeta{}, fmt.Sprintf("registry entry %q skipped: marker does not match registry (name %q vs %q)", dir, marker.Name, m.Name), false
 	}
 	return marker, "", true

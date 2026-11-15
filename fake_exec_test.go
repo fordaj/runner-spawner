@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -65,8 +66,19 @@ type fakeExecutor struct {
 	// <dir>/.runner so the code under test sees it via isConfigured.
 	configured map[string]bool
 
-	// gh CLI simulation (token minting + admin API for re-registration
-	// and deregistration when the dir is gone).
+	// Per-runner-dir failure injection, keyed on the working directory
+	// the script runs in. Lets batch tests fail exactly one installation
+	// while others succeed.
+	FailSvcStartDirs map[string]error
+	FailSvcStopDirs  map[string]error
+	FailSvcStatusDirs map[string]error
+
+	// Scripted `gh api <endpoint>` responses, keyed on the endpoint
+	// argument (the first non-flag argument after "api"; --jq consumes
+	// its value). Consulted before the built-in registration/
+	// deregistration handlers, so inventory tests can script any
+	// endpoint. gh --version always succeeds in the fake.
+	GitHubResponses map[string]fakeGitHubResponse
 	GitHubTokenErr    error
 	GitHubListIDs     []string
 	GitHubListErr     error
@@ -93,6 +105,48 @@ type fakeExecutor struct {
 	// wait-for-stopped polling.
 	WindowsStopPendingCount int
 	stopPending             int
+}
+
+// fakeGitHubResponse scripts one `gh api <endpoint>` call.
+type fakeGitHubResponse struct {
+	Out string
+	Err error
+}
+
+// ghEndpointArg extracts the endpoint argument from a gh invocation
+// like ["api", "--paginate", "orgs/acme/actions/runners?per_page=100",
+// "--jq", ".runners[]"]. ok is false when there is no "api" argument.
+func ghEndpointArg(args []string) (string, bool) {
+	for i, a := range args {
+		if a != "api" {
+			continue
+		}
+		for j := i + 1; j < len(args); j++ {
+			arg := args[j]
+			if arg == "--jq" {
+				j++ // skip the filter value
+				continue
+			}
+			if strings.HasPrefix(arg, "-") {
+				continue
+			}
+			return arg, true
+		}
+		return "", false
+	}
+	return "", false
+}
+
+// ghRunnerNDJSON renders runner objects as gh --paginate --jq NDJSON
+// output would (one JSON object per line).
+func ghRunnerNDJSON(runners ...map[string]any) string {
+	var sb strings.Builder
+	for _, r := range runners {
+		data, _ := json.Marshal(r)
+		sb.Write(data)
+		sb.WriteByte('\n')
+	}
+	return sb.String()
 }
 
 func newFakeExecutor() *fakeExecutor {
@@ -165,6 +219,14 @@ func (f *fakeExecutor) writePlist(v bool) {
 	_ = os.Remove(f.plistPath)
 }
 
+func keysOfGitHubResponses(m map[string]fakeGitHubResponse) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
 func isConfigRemove(args []string) bool {
 	for _, a := range args {
 		if a == "remove" {
@@ -219,9 +281,23 @@ func (f *fakeExecutor) execute(name string, args []string, dir string) (string, 
 }
 
 // runGH simulates the gh CLI calls runner-spawner makes: minting a
-// registration token and listing/deleting repo-scoped runners.
+// registration token, listing/deleting repo-scoped runners, and (for
+// inventory tests) any scripted `gh api` endpoint.
 func (f *fakeExecutor) runGH(args []string) (string, error) {
 	joined := strings.Join(args, " ")
+	if len(args) > 0 && args[0] == "--version" {
+		return "gh version 2.50.0 (fake)\n", nil
+	}
+	// Generic scripted responses (inventory tests) win over the
+	// built-in registration/deregistration handlers.
+	if f.GitHubResponses != nil {
+		if ep, ok := ghEndpointArg(args); ok {
+			if resp, ok := f.GitHubResponses[ep]; ok {
+				return resp.Out, resp.Err
+			}
+			return "", fmt.Errorf("fakeExecutor: unexpected gh api endpoint %q (scripted: %v)", ep, keysOfGitHubResponses(f.GitHubResponses))
+		}
+	}
 	switch {
 	case strings.Contains(joined, "registration-token"):
 		if f.GitHubTokenErr != nil {
@@ -316,6 +392,9 @@ func (f *fakeExecutor) svcAction(args []string, dir string) (string, error) {
 		}
 		return "Creating launch runner\nsvc install complete\n", nil
 	case "start":
+		if err, ok := f.FailSvcStartDirs[dir]; ok {
+			return err.Error(), err
+		}
 		if f.FailSvcStart != nil {
 			return f.FailSvcStart.Error(), f.FailSvcStart
 		}
@@ -325,6 +404,9 @@ func (f *fakeExecutor) svcAction(args []string, dir string) (string, error) {
 		f.setSvcState("running")
 		return "", nil
 	case "stop":
+		if err, ok := f.FailSvcStopDirs[dir]; ok {
+			return err.Error(), err
+		}
 		if f.FailSvcStop != nil {
 			return f.FailSvcStop.Error(), f.FailSvcStop
 		}
@@ -348,6 +430,9 @@ func (f *fakeExecutor) svcAction(args []string, dir string) (string, error) {
 }
 
 func (f *fakeExecutor) svcStatusOutput(dir string, args []string) (string, error) {
+	if err, ok := f.FailSvcStatusDirs[dir]; ok {
+		return "", err
+	}
 	if f.FailSvcStatus != nil {
 		return "", f.FailSvcStatus
 	}

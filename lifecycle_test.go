@@ -40,6 +40,10 @@ func newLifecycleFixture(t *testing.T, goos string) *lifecycleFixture {
 	prevHome := userHomeDir
 	userHomeDir = func() (string, error) { return home, nil }
 	t.Cleanup(func() { userHomeDir = prevHome })
+	prevCfgDir := userConfigDir
+	cfgDir := t.TempDir()
+	userConfigDir = func() (string, error) { return cfgDir, nil }
+	t.Cleanup(func() { userConfigDir = prevCfgDir })
 	prevTimeout, prevInterval := serviceTimeout, servicePollInterval
 	serviceTimeout = 500 * time.Millisecond
 	servicePollInterval = time.Millisecond

@@ -30,17 +30,17 @@ import (
 
 // inventoryRunner is one runner as reported by the GitHub API.
 type InventoryRunner struct {
-	ID             int64    `json:"id"`
-	Name           string   `json:"name"`
-	Scope          string   `json:"scope"` // registration scope: "repo" or "org"
-	Repository     string   `json:"repository,omitempty"`   // owner/repo (repo-scoped runners)
-	Organization   string   `json:"organization,omitempty"` // org name (org-scoped runners)
-	Status         string   `json:"status"`                 // online | offline (passthrough)
-	Busy           bool     `json:"busy"`
-	Labels         []string `json:"labels,omitempty"`
-	Version        string   `json:"version,omitempty"`
-	OS             string   `json:"os,omitempty"`
-	Ephemeral      bool     `json:"ephemeral,omitempty"`
+	ID           int64    `json:"id"`
+	Name         string   `json:"name"`
+	Scope        string   `json:"scope"`                  // registration scope: "repo" or "org"
+	Repository   string   `json:"repository,omitempty"`   // owner/repo (repo-scoped runners)
+	Organization string   `json:"organization,omitempty"` // org name (org-scoped runners)
+	Status       string   `json:"status"`                 // online | offline (passthrough)
+	Busy         bool     `json:"busy"`
+	Labels       []string `json:"labels,omitempty"`
+	Version      string   `json:"version,omitempty"`
+	OS           string   `json:"os,omitempty"`
+	Ephemeral    bool     `json:"ephemeral,omitempty"`
 }
 
 // InventoryFailure is one source that could not be queried. Failures
