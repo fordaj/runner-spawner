@@ -51,6 +51,10 @@ service probe — never from a journal file. `create` therefore:
 - starts an installed-but-stopped service instead of reinstalling;
 - no-ops on an already-running runner.
 
+If GitHub still has a runner with the same name, `create` passes
+`--replace` to `config.sh`, so the stale registration is superseded
+in place instead of erroring.
+
 `remove` does the same in reverse: it waits for the service to stop,
 handles already-stopped/already-uninstalled states, tolerates an empty
 or partial runner dir (deleting it after a best-effort remote
@@ -286,6 +290,15 @@ architectures where the runner image allows.
 - `.runner-spawner.json` schema validation beyond unknown-key
   rejection (no `runnerGroup` existence check against the GitHub API).
 - Integrity checking of the downloaded actions/runner archive (#6).
+- GitHub-side orphan registrations (runner registered on GitHub, local
+  dir deleted) are not visible to `status`/`list` — that needs an
+  authenticated API call. Re-running `runner-spawner remove --name
+  <name>` completes the job (a second run deregisters via the admin
+  API when the dir is already gone).
+- A hostname change orphans the previous service registration
+  (`displayName` is `hostname-name`); `create` will register a new
+  service under the new label. Remove the old service manually
+  (`sc.exe delete` / `launchctl remove` with the old label).
 
 ## History
 
