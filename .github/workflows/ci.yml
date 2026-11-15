@@ -16,12 +16,14 @@ permissions:
 
 jobs:
   check-formatting:
-    name: Check Formatting (Windows)
-    # NOTE: macOS legs removed — both [self-hosted, macOS] runners
-    # (maestro-ci-macos, maestro-ci-windows) are OFFLINE, so macOS jobs
-    # queue forever. See https://github.com/fordaj/runner-spawner/issues/9.
-    # Restore a macOS leg ([self-hosted, macOS]) once those runners are back.
-    runs-on: [self-hosted, Windows]
+    name: Check Formatting (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macOS, labels: [self-hosted, macOS] }
+          - { os: Windows, labels: [self-hosted, Windows] }
+    runs-on: ${{ matrix.labels }}
     timeout-minutes: 15
     defaults:
       run:
@@ -136,12 +138,14 @@ jobs:
         run: ./ci/format_check.bash
 
   test:
-    name: Test (Windows)
-    # NOTE: macOS leg removed — [self-hosted, macOS] runners are OFFLINE,
-    # so macOS jobs queue forever. See
-    # https://github.com/fordaj/runner-spawner/issues/9.
-    # Restore a macOS leg ([self-hosted, macOS]) once those runners are back.
-    runs-on: [self-hosted, Windows]
+    name: Test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macOS, labels: [self-hosted, macOS] }
+          - { os: Windows, labels: [self-hosted, Windows] }
+    runs-on: ${{ matrix.labels }}
     timeout-minutes: 15
     defaults:
       run:
