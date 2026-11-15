@@ -17,6 +17,16 @@ runner-spawner start --name runner01
 runner-spawner stop --name runner01
 runner-spawner status --name runner01
 runner-spawner list              # config names + on-disk dirs
+
+# scope-aware lifecycle management (list, status, start, stop)
+runner-spawner list --scope pc
+runner-spawner start --scope repo
+runner-spawner stop --scope pc
+
+# read-only GitHub runner inventory (status only)
+runner-spawner status --scope repo --repo fordaj/runner-spawner
+runner-spawner status --scope org --org fordaj
+runner-spawner status --scope owner --owner fordaj
 ```
 
 ## How it works
@@ -174,6 +184,10 @@ detection (owner/repo only), `.runner-spawner.json`,
 - Output: `--format json` (`status`/`list`, and structured per-runner
   results for `create`/`remove`/`start`/`stop`); `--dry-run` prints
   commands without executing; `--quiet` suppresses stderr progress.
+  JSON payloads carry a `scope` key (`directory`|`repo`|`pc`, or
+  `repo`|`org`|`owner` for inventory); in directory scope the classic
+  `repo` key is kept for compatibility, and discovered runners include
+  `repo` when known.
 - `--local-only` (`remove` only): skip GitHub deregistration and
   remove locally; use when GitHub is unreachable or the runner was
   already deregistered. Without it, a missing token is a warning, not
@@ -182,7 +196,123 @@ detection (owner/repo only), `.runner-spawner.json`,
 - Locks: mutating verbs take `<runnersDir>/.locks/<name>.lock`
   (stale after 15 min) so concurrent or interrupted runs cannot
   interleave.
-- Exit codes: `0` success, `1` runtime error, `2` bad flags/config.
+- Exit codes: `0` success, `1` runtime error (including an inventory or
+  batch with reported failures), `2` bad flags/config.
+
+## Scope-aware lifecycle management
+
+`list`, `status`, `start` and `stop` accept `--scope` to select which
+runner installations on the machine they operate on:
+
+| Scope       | What it targets                                                                                            |
+| ----------- | ---------------------------------------------------------------------------------------------------------- |
+| `directory` | (default) only the runners in the configured `--runners-dir`.                                              |
+| `repo`      | every installation of the current repository, including other clones/working directories of the same repo. |
+| `pc`        | every runner-spawner-managed installation on this machine, regardless of repository.                       |
+
+```bash
+runner-spawner list --scope pc
+runner-spawner status --scope repo
+runner-spawner start --scope repo
+runner-spawner stop --scope pc
+```
+
+**How discovery works.** Every installation this tool creates carries a
+marker file, `.runner-spawner-install.json`, inside the runner dir. The
+marker records the runner name, owning repository (`owner/repo`), the
+clone's `repoDir`, the installation dir, platform/architecture, the
+GitHub registration scope, and the service registration. A machine-wide
+index, `<user-config-dir>/runner-spawner/installations.json` (e.g.
+`~/Library/Application Support/runner-spawner/installations.json` on
+macOS, `%AppData%\runner-spawner\installations.json` on Windows),
+lists installations created by this tool. `repo` scope selects registry
+entries whose repository or `repoDir` matches the invocation's repo;
+`pc` scope selects all of them. The configured `--runners-dir` is
+always in scope in addition to registry matches. Registry entries are
+treated as pointers, not truth: an entry is managed only when its dir
+exists and its marker parses, matches the registry (name, installation
+dir, repo), and was written by runner-spawner. Stale or unverifiable
+entries are reported as warnings and **never** managed — neither is
+anything that isn't runner-spawner-managed, even if a similarly named
+service exists.
+
+Directory-scope behavior is unchanged from previous versions (config
+names plus on-disk dirs; no registry involved). `create` writes the
+marker + registry entry (a failure there warns but does not fail the
+create); `remove` prunes the entry. If a pre-existing installation has
+no marker yet, it is still managed in `directory` scope, and in
+`repo`/`pc` scope when found via the configured root; adopt an
+unmarked installation by re-running `runner-spawner create --name
+<name>` (it rewrites the marker and re-registers without touching a
+healthy service).
+
+**Batch semantics.** `start`/`stop` (and `create`/`remove`) no longer
+abort on the first failure: every target is attempted, each outcome is
+reported individually, and an aggregate error naming the failures is
+returned at the end (exit code `1`). `--format json` emits a
+`results` array with per-runner `name`, `repo`, `ok` and `error`;
+`--name` filters the installations a scoped `status`/`start`/`stop`
+acts on (`list` reports everything in scope). Starting an already-
+running runner and stopping an already-stopped one are safe no-ops.
+Batch operations never touch anything outside the scope's discovery
+rules, and a stopping runner is never deregistered from GitHub —
+removal from GitHub is `remove`'s job.
+
+Example:
+
+```bash
+runner-spawner list --scope pc
+# runner01  maestro-runner01  repo=acme/widgets  configured=true  service=running  /Users/maestro/src/widgets/.runners/runner01
+# runner02  maestro-runner02  repo=acme/other    configured=true  service=stopped  /Users/maestro/src/other/.runners/runner02  hint: stopped — ...
+```
+
+## GitHub runner inventory
+
+`status` can also query the **GitHub API** (read-only) for the runners
+registered to repositories or organizations — an inventory of
+registrations, not remote machine control, and nothing here can start,
+stop, create or remove a runner:
+
+```bash
+runner-spawner status --scope repo --repo fordaj/runner-spawner
+runner-spawner status --scope repo                  # --repo owner/repo, or --owner + --repo
+runner-spawner status --scope org --org fordaj
+runner-spawner status --scope owner --owner fordaj
+```
+
+- `repo` queries `repos/{owner}/{repo}/actions/runners`. `org` queries
+  `orgs/{org}/actions/runners`. `owner` aggregates: it queries the
+  org-level endpoint when the owner is an organization, and — because
+  GitHub has no universal "all runners of an account" endpoint —
+  enumerates the repositories visible to the authenticated token
+  (`users/{owner}/repos?type=owner`, or `orgs/{org}/repos?type=all`
+  for organizations) and queries each repository's endpoint.
+- Output lists: runner ID and name, registration scope (`repo` or
+  `org`), the associated repository or organization, online/offline
+  status, busy/idle state, labels and runner version where available.
+  `--format json` emits `scope`, `target`, `ok`, `runners[]` and
+  `failures[]`.
+- Pagination is followed automatically (`gh api --paginate`); duplicate
+  runners reached through multiple paths are de-duplicated.
+- Inaccessible repositories/organizations are reported as **partial
+  failures** (one warning per target on stderr) without aborting the
+  rest of the inventory; the command exits `1` and reports what could
+  and could not be queried. A 404 usually means the token cannot see
+  the target; a 401/403 usually means a token scope or permission
+  problem — the warnings say which, and empty inventory (zero runners
+  found with no failures) is a success, distinct from failure.
+- Authentication uses the `gh` CLI's existing credentials (`gh auth
+login`, `GH_TOKEN` or `GITHUB_TOKEN`); runner-spawner never stores or
+  prints tokens. `gh` must be installed for inventory commands.
+- `--repo owner/repo` implies inventory mode; `--github` forces it.
+  Without them, `--scope repo` means the local repo scope above.
+  `--org` and `--owner` default from `--owner` / config / git remote.
+
+GitHub API status is the runner's reported online/offline and
+busy/idle state; it does **not** control the host machine. Use the
+local scopes (`--scope directory|repo|pc`) to manage the services on
+this machine, and the inventory scopes to audit registrations on
+GitHub.
 
 ## Platforms
 
@@ -219,7 +349,9 @@ make build|test|vet|cross   # `cross` emits dist/<goos>-<goarch>/
 `go test ./...` runs fully offline: lifecycle/crash-resume tests use
 a fake executor (`fake_exec_test.go`) that records every
 `svc.sh`/`config.sh`/`sc.exe`/`gh` invocation and simulates
-`.runner`/service state, so the whole create/remove state matrix is
+`.runner`/service state (including scripted `gh api` endpoints and
+per-runner-dir service failures), so the whole create/remove state
+matrix, scope-aware discovery, and GitHub inventory aggregation are
 covered without network or real services.
 
 Formatting is delegated to
@@ -240,7 +372,8 @@ configured by `.prettierrc`. Prerequisites (`uv`, Go with
 ```
 /            # Go module (typical Go layout; `package main` at root)
   go.mod, main.go, config.go, git.go, platform.go, archive.go,
-  token.go, runner.go, verbs.go, script.go, *_test.go
+  token.go, runner.go, verbs.go, script.go, install.go, inventory.go,
+  scope.go, *_test.go
   Makefile  scripts/release.sh  .runner-spawner.json  .versioner.json
   format.bash  ci/format_check.bash  pyproject.toml  uv.lock
   .formattington.json  .prettierrc  .python-version  LICENSE
@@ -278,9 +411,11 @@ name.
 is the tool that provisions them — no GitHub-hosted compute, and no Linux
 job). Two jobs: `Check Formatting` (`./ci/format_check.bash` after installing
 uv, prettier, shfmt and goimports) and `Test` (`go vet ./...`, a `gofmt`
-check, `go test ./...` on macOS and Windows). Jobs target
-`runs-on: [self-hosted, macOS]` / `[self-hosted, Windows]`; create
-the runners with this tool itself. On this repo:
+check, `go test ./...`). Jobs currently target `runs-on: [self-hosted,
+Windows]` while the macOS runners are unavailable (see
+[#9](https://github.com/fordaj/runner-spawner/issues/9)); the intended
+shape is one macOS + one Windows leg each, created with this tool
+itself. On this repo:
 
 ```bash
 runner-spawner create --repo-dir <repo> --owner fordaj --repo runner-spawner --name ci-macos
@@ -298,10 +433,15 @@ runner-spawner create --repo-dir <repo> --owner fordaj --repo runner-spawner --n
   rejection (no `runnerGroup` existence check against the GitHub API).
 - Integrity checking of the downloaded actions/runner archive (#6).
 - GitHub-side orphan registrations (runner registered on GitHub, local
-  dir deleted) are not visible to `status`/`list` — that needs an
-  authenticated API call. Re-running `runner-spawner remove --name
-<name>` completes the job (a second run deregisters via the admin
-  API when the dir is already gone).
+  dir deleted) are visible in the read-only inventory
+  (`runner-spawner status --scope repo --repo <owner>/<repo>` /
+  `--scope owner --owner <owner>`), but there is no bulk unregister —
+  re-running `runner-spawner remove --name <name>` completes a local
+  removal whose GitHub deregistration failed earlier (a second run
+  deregisters via the admin API when the dir is already gone).
+- Owner-wide inventory visibility is limited by the token's access:
+  private repos/orgs the token cannot see are reported as partial
+  failures, not enumerated.
 - A hostname change orphans the previous service registration
   (`displayName` is `hostname-name`); `create` will register a new
   service under the new label. Remove the old service manually
