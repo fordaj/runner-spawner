@@ -1,5 +1,18 @@
 # The barnacle bundle (`tools/barnacle/`)
 
+```mermaid
+flowchart TD
+    Upd[tools/barnacle/update.sh] --> Tag[resolve tag<br/>latest release or --tag]
+    Tag --> DL[gh release download<br/>macos linux windows × x86_64 arm64]
+    DL --> Verify[verify against<br/>checksums.txt]
+    Verify --> Stage[stage into bundle temp dir]
+    Stage --> Swap[swap in v‹tag›/<br/>delete superseded]
+    Swap --> Smoke[host binary --version<br/>must contain tag]
+    ClickSite[scripts/docs.sh<br/>uses this bundle] -.-> Upd
+    click ClickSite href "../../scripts/docs.sh.md"
+    click Upd href "../README.md"
+```
+
 [Barnacle](https://github.com/fordaj/barnacle) is a documentation-site generator: it renders the `.md` and `.mmd` files scattered through a repository into a static, navigable HTML site. This repository uses it to render *this* documentation; the site you may be reading was built by it.
 
 ## Layout
@@ -33,10 +46,10 @@ Note this bundle is refreshed independently of the runner-spawner release pipeli
 
 ## How the repository uses it
 
-[scripts/docs.sh](../../scripts/docs.md) resolves `BARNACLE_BIN` through the [env cascade](../../scripts/env.md) and generates `./site/` from the repo root; the output is git-ignored.
+[scripts/docs.sh](../../scripts/docs.sh.md) resolves `BARNACLE_BIN` through the [env cascade](../../scripts/env.sh.md) and generates `./site/` from the repo root; the output is git-ignored.
 
 ## Related pages
 
 - [../README.md](../README.md) — the bundle index
 - [../../scripts/README.md](../../scripts/README.md) — the scripts that consume the bundle
-- [../../scripts/docs.md](../../scripts/docs.md)
+- [../../scripts/docs.sh.md](../../scripts/docs.sh.md)

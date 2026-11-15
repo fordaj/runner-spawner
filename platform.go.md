@@ -1,5 +1,19 @@
 # Platform detection (`platform.go`)
 
+```mermaid
+flowchart TD
+    GOOS[GOOS / GOARCH<br/>from runtime] --> For[platformFor<br/>fill platform struct]
+    For --> Supported{Supported?<br/>darwin amd64 arm64<br/>windows amd64 arm64}
+    Supported -->|no| Refuse([mutating verbs refuse<br/>Linux unsupported])
+    Supported -->|yes| Use[runner asset · archive ext<br/>service script · labels]
+    Use --> Admin{Windows?}
+    Admin -->|yes| Check[adminCheck<br/>net session elevation gate]
+    Admin -->|no| Mac[svc.sh + LaunchAgent plist]
+    Use --> Labels[Labels cfg name<br/>self-hosted os arch host]
+    click Use href "archive.go.md"
+    click Labels href "verbs.go.md"
+```
+
 `platform.go` describes what the host machine can run and how its runner is supervised. **Supported at runtime: macOS (`darwin/amd64`, `darwin/arm64`) and Windows (`windows/amd64`, `windows/arm64`) only. Linux reports an explicit unsupported error for the mutating verbs; the Linux asset names are still filled in so `status`/`list` diagnostics can describe the host, and Linux binaries are cross-compiled so the release/bundle layout stays uniform.**
 
 ## The `platform` struct
@@ -20,6 +34,6 @@
 
 ## Related pages
 
-- [runner.md](runner.md) — consumes `platform` for paths and script names
-- [archive.md](archive.md) — uses `RunnerAsset`/`ArchiveExt` for downloads
-- [verbs.md](verbs.md) — enforces `requireSupported`/`adminCheck` in create/remove/start/stop
+- [runner.go.md](runner.go.md) — consumes `platform` for paths and script names
+- [archive.go.md](archive.go.md) — uses `RunnerAsset`/`ArchiveExt` for downloads
+- [verbs.go.md](verbs.go.md) — enforces `requireSupported`/`adminCheck` in create/remove/start/stop

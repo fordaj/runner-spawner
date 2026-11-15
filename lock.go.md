@@ -1,5 +1,16 @@
 # Mutation lock files (`lock.go` + `lock_unix.go` + `lock_windows.go`)
 
+```mermaid
+flowchart TD
+    Verb[create / remove / start / stop] --> Lock[lockRunner<br/>O_CREATE · O_EXCL<br/>.locks/name.lock]
+    Lock --> Created{created?}
+    Created -->|yes| Run[verb proceeds<br/>defer unlock]
+    Created -->|no| Stale{lockIsStale?<br/>mtime older than 15 min<br/>or owner process gone}
+    Stale -->|yes| Takeover[acquireLockFile<br/>remove + re-create] --> Run
+    Stale -->|no| Error([error: another process<br/>is operating on it])
+    click Verb href "verbs.go.md"
+```
+
 Mutating verbs on the same runner are serialized through a lock file so concurrent or interrupted runs cannot interleave. This page covers `lock.go` (the shared logic) and the two `processAlive` probes selected by build tags — they are one mechanism, split by platform.
 
 ## `lock.go` — the mechanism
@@ -18,9 +29,9 @@ Both expose one function, `processAlive(pid int) bool`:
 
 ## Where it is used
 
-Every mutating verb (`createOne`/`removeOne`/`startOne`/`stopOne` call `lockRunner` first — see [verbs.md](verbs.md)). An interrupted run therefore cannot wedge a runner forever: re-running after 15 minutes (or after the owner process disappears on Unix) converges.
+Every mutating verb (`createOne`/`removeOne`/`startOne`/`stopOne` call `lockRunner` first — see [verbs.go.md](verbs.go.md)). An interrupted run therefore cannot wedge a runner forever: re-running after 15 minutes (or after the owner process disappears on Unix) converges.
 
 ## Related pages
 
-- [verbs.md](verbs.md) — the verbs that hold the lock
-- [main.md](main.md) — `<runnersDir>/.locks/<name>.lock` is the documented user-facing contract
+- [verbs.go.md](verbs.go.md) — the verbs that hold the lock
+- [main.go.md](main.go.md) — `<runnersDir>/.locks/<name>.lock` is the documented user-facing contract

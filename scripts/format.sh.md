@@ -1,5 +1,16 @@
 # Formatting the repository (`scripts/format.sh`)
 
+```mermaid
+flowchart LR
+    Format[scripts/format.sh] --> UV[uv run<br/>pyproject.toml + uv.lock]
+    UV --> FMT[formattington<br/>pinned git commit]
+    FMT --> Prettier[*.md *.json<br/>prettier]
+    FMT --> Go[*.go<br/>goimports]
+    FMT --> Sh[*.sh *.bash<br/>shfmt -i 4]
+    Sh -.-> Exclude[env.sh excluded<br/>zsh-only syntax]
+    Check[ci/format_check.sh<br/>same config --check] -.-> FMT
+```
+
 `scripts/format.sh` formats the repository in place using [formattington](https://github.com/fordaj/formattington), pinned in `pyproject.toml` (git commit `dbed7479…`) and locked in `uv.lock`. No pip/venv setup is needed: `uv run` creates `.venv/` automatically (Python 3.14, see `.python-version`).
 
 ## Usage

@@ -1,6 +1,21 @@
 # The logamuffin bundle (`tools/logamuffin/`)
 
-[Logamuffin](https://github.com/fordaj/logamuffin) is the structured logger used by this repository's scripts: timestamped, leveled `log <level> <message>` records. The scripts' `log()` wrapper ([scripts/entry.md](../../scripts/entry.md)) forwards to the pinned binary when it is present and falls back to an equivalent `printf` implementation when it is not, so a fresh clone works without it.
+```mermaid
+flowchart TD
+    Upd[tools/logamuffin/update.sh] --> Tag[resolve tag<br/>latest release or --tag]
+    Tag --> DL[gh release download<br/>platform archives]
+    DL --> Verify{checksums.txt<br/>present?}
+    Verify -->|yes| OK[verify SHA-256]
+    Verify -->|no| Warn[warn · continue]
+    OK --> Stage[stage into bundle temp dir]
+    Warn --> Stage
+    Stage --> Swap[atomic swap<br/>delete superseded v*/]
+    Entry[scripts/entry.sh log<br/>forwards to this binary] -.-> Upd
+    click Upd href "../README.md"
+    click Entry href "../../scripts/entry.sh.md"
+```
+
+[Logamuffin](https://github.com/fordaj/logamuffin) is the structured logger used by this repository's scripts: timestamped, leveled `log <level> <message>` records. The scripts' `log()` wrapper ([scripts/entry.sh.md](../../scripts/entry.sh.md)) forwards to the pinned binary when it is present and falls back to an equivalent `printf` implementation when it is not, so a fresh clone works without it.
 
 The scripts themselves document the contract (`log INFO "..."`), the `LOG_LEVEL`/`LOGAMUFFIN_LEVEL` filter, and the `LOG_SOURCE` caller-context field that entry.sh injects.
 
@@ -15,4 +30,4 @@ Refreshes from `fordaj/logamuffin` releases: platform archives whose stem ends i
 ## Related pages
 
 - [../README.md](../README.md) — the bundle index
-- [../../scripts/entry.md](../../scripts/entry.md) — the `log()` wrapper that calls it
+- [../../scripts/entry.sh.md](../../scripts/entry.sh.md) — the `log()` wrapper that calls it

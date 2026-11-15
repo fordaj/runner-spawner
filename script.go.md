@@ -1,5 +1,17 @@
 # Subprocess seam (`script.go`)
 
+```mermaid
+flowchart TD
+    Verbs[verbs.go.md · token.go.md · runner.go.md] --> Helpers[runScript · runScriptCapture<br/>runCmd · runCmdCapture]
+    Helpers --> Seam{commandExecution<br/>package var}
+    Seam -->|production| Real[realExecutor<br/>os/exec]
+    Seam -->|tests| Fake[fake_exec_test.go<br/>records invocations,<br/>scripts gh api + service state]
+    Real --> Exit[exitCoder<br/>*exec.ExitError]
+    Fake --> Exit
+    Seam -.-> Scripts[config.sh / svc.sh / sc.exe<br/>gh / git / net]
+    click Verbs href "verbs.go.md"
+```
+
 `script.go` is the only place the tool spawns external commands (`.runner` scripts, `sc.exe`, `net`, `gh`, `git`). All of it goes through one interface so tests can run hermetically — the whole create/remove/start/stop state matrix is covered by `fake_exec_test.go` without network, real services, or a Windows machine.
 
 ## The seam
@@ -19,6 +31,6 @@ Because every subprocess funnels through `commandExecution`, `go test ./...` run
 
 ## Related pages
 
-- [runner.md](runner.md) — `runCmd`/`runCmdCapture` wrappers
-- [verbs.md](verbs.md) — the lifecycle operations built on this seam
-- [token.md](token.md) — `gh api` goes through the same seam
+- [runner.go.md](runner.go.md) — `runCmd`/`runCmdCapture` wrappers
+- [verbs.go.md](verbs.go.md) — the lifecycle operations built on this seam
+- [token.go.md](token.go.md) — `gh api` goes through the same seam

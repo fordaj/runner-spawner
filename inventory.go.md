@@ -1,5 +1,24 @@
 # GitHub runner inventory (`inventory.go`)
 
+```mermaid
+flowchart TD
+    Status[status --scope repo / org / owner] --> Scope{scope?}
+    Scope -->|repo or org| Direct[ghRunners<br/>one endpoint]
+    Scope -->|owner| Agg[collectOwnerInventory<br/>aggregate]
+    Agg --> OrgProbe{isOrg?<br/>orgs/owner}
+    OrgProbe -->|yes| OrgRepos[orgs/org/repos?type=all]
+    OrgProbe -->|no| UserRepos[users/owner/repos?type=owner]
+    OrgRepos --> Direct
+    UserRepos --> Direct
+    Direct --> Parse[parseRunnerNDJSON<br/>gh api --paginate]
+    Parse --> Out[writeInventory<br/>text table or JSON]
+    Scope --> Seam[ghAPI<br/>commandExecution seam]
+    Direct --> Seam
+    click Status href "scope.go.md"
+    click Seam href "script.go.md"
+    click Out href "main.go.md"
+```
+
 `inventory.go` implements read-only GitHub runner inventory for `runner-spawner status --scope repo|org|owner`. It talks to GitHub exclusively through the `gh` CLI, honoring `gh`'s existing authentication (`gh auth login`, `GH_TOKEN`, `GITHUB_TOKEN`). **Nothing in this file can start, stop, create or remove a runner — every call is a GET.**
 
 ## How it works
@@ -17,5 +36,5 @@ Key types: `InventoryRunner` (ID, Name, Scope, Repository/Organization, Status, 
 
 ## Related pages
 
-- [scope.md](scope.md) — how inventory mode is selected
-- [main.md](main.md) — `runInventory` dispatch and the `--repo owner/repo` shorthand
+- [scope.go.md](scope.go.md) — how inventory mode is selected
+- [main.go.md](main.go.md) — `runInventory` dispatch and the `--repo owner/repo` shorthand

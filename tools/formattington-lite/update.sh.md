@@ -1,6 +1,20 @@
 # The formattington-lite bundle (`tools/formattington-lite/`)
 
-[Formattington](https://github.com/fordaj/formattington) is the formatter orchestrator this repository uses via [`format.sh`](../../scripts/format.md) — but the committed `pyproject.toml`/`uv.lock` pin a git commit for the *real* formatting runs. This bundle carries the **formattington-lite** release asset — the bare `formattington` binary without embedded formatter executables — for convenience and uniformity.
+```mermaid
+flowchart TD
+    Upd[tools/formattington-lite/update.sh] --> Tag[resolve tag<br/>latest release or --tag]
+    Tag --> Filter[keep only -lite assets<br/>drop -full bundles]
+    Filter --> DL[gh release download]
+    DL --> Verify{checksums.txt<br/>present?}
+    Verify -->|yes| OK[verify SHA-256]
+    Verify -->|no| Warn[warn · continue]
+    OK --> Stage[stage into bundle temp dir]
+    Warn --> Stage
+    Stage --> Swap[atomic swap<br/>delete superseded v*/]
+    click Upd href "../README.md"
+```
+
+[Formattington](https://github.com/fordaj/formattington) is the formatter orchestrator this repository uses via [`format.sh`](../../scripts/format.sh.md) — but the committed `pyproject.toml`/`uv.lock` pin a git commit for the *real* formatting runs. This bundle carries the **formattington-lite** release asset — the bare `formattington` binary without embedded formatter executables — for convenience and uniformity.
 
 **It is not part of the env cascade** (`scripts/.common.env` sets nothing for it) and nothing in the scripts resolves it; the other four bundles are the cascade-backed ones.
 
@@ -18,4 +32,4 @@ Stages into a temporary directory inside the bundle, swaps the version directory
 
 - [../README.md](../README.md) — the bundle index
 - [../../scripts/README.md](../../scripts/README.md) — the scripts that consume the cascade-backed bundles
-- [../../format.md](../../scripts/format.md) — how formatting is actually wired up here
+- [../../scripts/format.sh](../../scripts/format.sh.md) — how formatting is actually wired up here

@@ -1,5 +1,20 @@
 # Installation markers and the machine registry (`install.go`)
 
+```mermaid
+flowchart TD
+    Disco[discoverInstallations<br/>scope.go calls this] --> Reg[installations.json<br/>machine-wide index]
+    Reg --> Valid{validRegistryEntry<br/>dir exists, marker parses<br/>matches registry, tool = runner-spawner}
+    Valid -->|no| Warn([warn + never manage])
+    Valid -->|yes| Match{repo / pc scope<br/>repoMatches}
+    Root[configured runners-dir<br/>always in scope] --> Union[sortDiscovered]
+    Match -->|match| Union
+    Match -->|no| Skip([out of scope])
+    Union --> Filter[filterByNames<br/>--name filter]
+    Filter --> Targets[mutationTarget per runner<br/>scopedConfig]
+    click Disco href "scope.go.md"
+    click Targets href "verbs.go.md"
+```
+
 `install.go` implements scope-aware discovery of runner-spawner-managed installations on the local machine — the machinery behind `--scope repo` and `--scope pc`.
 
 ## Markers vs. registry
@@ -14,9 +29,9 @@ A machine-wide index, `<user-config-dir>/runner-spawner/installations.json` (e.g
 
 `discoverInstallations` selects registry matches for `repo` (repository or `repoDir` match — `repoMatches`/`repoFullNamesEqual`/`pathEqual`) or all valid entries for `pc`, unions them with the configured root, sorts deterministically (`sortDiscovered`), applies the `--name` filter (`filterByNames`), and builds per-target configs (`scopedConfig`). Pre-marker installations are adopted via `synthesizedMeta` when found through the configured root.
 
-`create` writes the marker and registry entry (failure warns, does not fail — see [verbs.md](verbs.md)); `remove` unregisters the installation.
+`create` writes the marker and registry entry (failure warns, does not fail — see [verbs.go.md](verbs.go.md)); `remove` unregisters the installation.
 
 ## Related pages
 
-- [scope.md](scope.md) — the scopes that consume this discovery
-- [verbs.md](verbs.md) — `recordInstallation` call site
+- [scope.go.md](scope.go.md) — the scopes that consume this discovery
+- [verbs.go.md](verbs.go.md) — `recordInstallation` call site

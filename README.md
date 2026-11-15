@@ -1,5 +1,30 @@
 # runner-spawner
 
+```mermaid
+flowchart TD
+    CLI[runner-spawner CLI<br/>main.go] --> Verbs[verbs.go<br/>create remove start stop status list]
+    CLI --> Init[init.go<br/>write .runner-spawner.json]
+    CLI --> Inventory[inventory.go<br/>read-only GitHub inventory]
+    Verbs --> Config[config.go<br/>defaults to file to env to flags]
+    Verbs --> Archive[archive.go<br/>download + atomic extract]
+    Verbs --> Lifecycle[lifecycle.go<br/>disk state + service probe]
+    Verbs --> Registry[install.go<br/>marker + machine registry]
+    Registry --> Scope[scope.go<br/>directory repo pc]
+    Config --> Git[git.go<br/>origin remote owner/repo]
+    Archive --> Platform[platform.go<br/>macOS + Windows]
+    Inventory --> GH[(GitHub API<br/>via gh CLI)]
+    click Verbs href "verbs.go.md"
+    click Init href "init.go.md"
+    click Inventory href "inventory.go.md"
+    click Config href "config.go.md"
+    click Archive href "archive.go.md"
+    click Lifecycle href "lifecycle.go.md"
+    click Registry href "install.go.md"
+    click Scope href "scope.go.md"
+    click Git href "git.go.md"
+    click Platform href "platform.go.md"
+```
+
 Install and manage repository-scoped self-hosted GitHub Actions
 runners for a locally cloned repository, from a single cross-compiled
 Go binary.
@@ -458,4 +483,4 @@ account_ instead of a bare "account".
 
 ## Documentation
 
-The repository documents itself: one sibling Markdown page per Go file, script, and tool bundle, rendered into `./site/` (git-ignored) by `scripts/docs.sh`. Start with [AGENTS.md](AGENTS.md) for the documentation layout and rules, then `scripts/docs.sh` to regenerate the site.
+The repository documents itself: one sibling page per Go file, script, and tool bundle, rendered into `./site/` (git-ignored) by `scripts/docs.sh`. Documentation files keep the documented file's suffix — `main.go` is documented by `main.go.md`, `scripts/docs.sh` by `scripts/docs.sh.md` — so files that share a base name stay individually documentable; hub pages (`README.md`) and free-standing diagrams keep plain names. Every page opens with a Mermaid diagram giving a newcomer the map before the prose, and diagram nodes/edges link between pages. Start with [AGENTS.md](AGENTS.md) for the documentation layout and rules, then `scripts/docs.sh` to regenerate the site.

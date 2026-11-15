@@ -1,10 +1,23 @@
 # The release pipeline (`scripts/release.sh`)
 
-`scripts/release.sh` versions, builds, packages, tags and publishes a GitHub release for runner-spawner. Everything it does flows through the [scripts](README.md) tooling and the [pinned tools](../tools/README.md).
+```mermaid
+flowchart TD
+    Rel[scripts/release.sh] --> Pre[preconditions<br/>git go tar zip · clean tree]
+    Pre --> Ver[versioner<br/>compute next tag]
+    Ver --> Cross[cross-compile six Go targets<br/>CGO off · ldflags toolVersion]
+    Cross --> Pack[archives + checksums.txt]
+    Pack --> Dry{--dry-run?}
+    Dry -->|yes| Stop([print plan · touch nothing])
+    Dry -->|no| Tag[annotated tag + push<br/>+ gh release create]
+    Tag --> Remind([refresh tools/runner-spawner bundle])
+    click Rel href "README.md"
+```
+
+`scripts/release.sh` versions, builds, packages, tags and publishes a GitHub release for runner-spawner. Everything it does flows through the [scripts](README.md) tooling and the pinned tools (`tools/README.md`).
 
 ## What a release produces
 
-For each of six Go targets (`darwin amd64`, `darwin arm64`, `linux amd64`, `linux arm64`, `windows amd64`, `windows arm64`): `dist/<goos>-<goarch>/runner-spawner[.exe]`, cross-compiled CGO-disabled with `-ldflags "-X main.toolVersion=<tag>"`. Linux binaries are built **for a uniform bundle layout only** — the mutating verbs refuse to run on Linux at runtime (see [../platform.md](../platform.md)).
+For each of six Go targets (`darwin amd64`, `darwin arm64`, `linux amd64`, `linux arm64`, `windows amd64`, `windows arm64`): `dist/<goos>-<goarch>/runner-spawner[.exe]`, cross-compiled CGO-disabled with `-ldflags "-X main.toolVersion=<tag>"`. Linux binaries are built **for a uniform bundle layout only** — the mutating verbs refuse to run on Linux at runtime (see [../platform.go.md](../platform.go.md)).
 
 Each architecture is packed into a flat `RunnerSpawner_<tag>_<arch>.tar.gz` (`.zip` on Windows) carrying the binary plus `README.md` and `LICENSE`, plus a `checksums.txt` (SHA-256) for all archives.
 
@@ -20,5 +33,5 @@ Prerequisites for a real release: `gh` authenticated (`gh auth login`). Unknown 
 ## Related pages
 
 - [README.md](README.md) — the scripts hub
-- [../version.md](../version.md) — where the stamped `toolVersion` is read
-- [../tools/versioner/update.md](../tools/versioner/update.md) · [../tools/runner-spawner/update.md](../tools/runner-spawner/update.md)
+- [../version.go.md](../version.go.md) — where the stamped `toolVersion` is read
+- `tools/versioner/update.sh.md` · `tools/runner-spawner/update.sh.md` (excluded from the generated site)
