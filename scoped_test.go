@@ -85,6 +85,17 @@ func TestResolveScopeSplitsSlashedRepo(t *testing.T) {
 	}
 }
 
+// useCurrentPlatform pins currentPlatform for the duration of the
+// test. runVerb probes services with the *host* platform; tests that
+// simulate a specific OS must pin it so they behave identically on
+// macOS and Windows hosts.
+func useCurrentPlatform(t *testing.T, p platform) {
+	t.Helper()
+	prev := currentPlatform
+	currentPlatform = func() platform { return p }
+	t.Cleanup(func() { currentPlatform = prev })
+}
+
 // makeScopeInstallation creates a marker-backed installation in repoDir
 // (under runnersDirRel) and registers it in the machine registry. The
 // service is simulated as installed (plist) so service probes behave
@@ -127,6 +138,7 @@ func makeScopeInstallation(t *testing.T, plat platform, repoDir, runnersDirRel, 
 
 func TestStopScopePcReportsIndividualFailures(t *testing.T) {
 	fx := newLifecycleFixture(t, "darwin")
+	useCurrentPlatform(t, fx.plat)
 	// The fixture installation lives in the fixture's repo, is running.
 	if err := fx.create(); err != nil {
 		t.Fatalf("create: %v", err)
@@ -192,6 +204,7 @@ func TestStopScopePcReportsIndividualFailures(t *testing.T) {
 
 func TestStartScopePcSucceeds(t *testing.T) {
 	fx := newLifecycleFixture(t, "darwin")
+	useCurrentPlatform(t, fx.plat)
 	if err := fx.create(); err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -243,6 +256,7 @@ func TestScopeOperationsWithEmptyRegistryAreNotAnError(t *testing.T) {
 
 func TestStatusScopeRepoReportsBothClones(t *testing.T) {
 	fx := newLifecycleFixture(t, "darwin")
+	useCurrentPlatform(t, fx.plat)
 	if err := fx.create(); err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -282,6 +296,7 @@ func TestStatusScopeRepoReportsBothClones(t *testing.T) {
 
 func TestListScopePcPrintsRepoColumns(t *testing.T) {
 	fx := newLifecycleFixture(t, "darwin")
+	useCurrentPlatform(t, fx.plat)
 	if err := fx.create(); err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -308,6 +323,7 @@ func TestBatchDirectoryScopeContinues(t *testing.T) {
 	// Even in the classic directory scope, one failing name must not
 	// abort the batch.
 	fx := newLifecycleFixture(t, "darwin")
+	useCurrentPlatform(t, fx.plat)
 	if err := fx.create(); err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -352,6 +368,7 @@ func TestBatchDirectoryScopeContinues(t *testing.T) {
 
 func TestCreateWrongScopeFails(t *testing.T) {
 	fx := newLifecycleFixture(t, "darwin")
+	useCurrentPlatform(t, fx.plat)
 	var stdout, stderr bytes.Buffer
 	err := runVerb("create", []string{
 		"--scope", "pc",
@@ -370,6 +387,7 @@ func TestCreateWrongScopeFails(t *testing.T) {
 
 func TestStopAlreadyStoppedIsIdempotentScoped(t *testing.T) {
 	fx := newLifecycleFixture(t, "darwin")
+	useCurrentPlatform(t, fx.plat)
 	if err := fx.create(); err != nil {
 		t.Fatalf("create: %v", err)
 	}
