@@ -90,6 +90,102 @@ func ensureArchive(cfg *Config, p platform, client *http.Client, logf func(strin
 	return dst, nil
 }
 
+// versionMarkerFile records which actions/runner version populated the
+// install dir. create reads it to decide whether a re-extract is needed.
+const versionMarkerFile = ".runner-spawner.version"
+
+// extractArchiveAtomic unpacks the archive into a staging directory
+// next to dir, carries over `preserve` files from any previous install,
+// stamps the version marker, and then swaps the staging directory into
+// place. An interrupted extraction therefore never poisons an existing
+// install: the swap only happens after the archive fully unpacked, and
+// stale files from an older runner version never survive it.
+func extractArchiveAtomic(archivePath, dir string, preserve []string, version string) error {
+	parent := filepath.Dir(dir)
+	if err := os.MkdirAll(parent, 0o755); err != nil {
+		return err
+	}
+	staging, err := os.MkdirTemp(parent, "."+filepath.Base(dir)+".extract-*")
+	if err != nil {
+		return err
+	}
+	// If anything fails before the swap, the stale staging dir is removed.
+	committed := false
+	defer func() {
+		if !committed {
+			_ = os.RemoveAll(staging)
+		}
+	}()
+	if err := extractArchive(archivePath, staging); err != nil {
+		return fmt.Errorf("extracting %s: %w", filepath.Base(archivePath), err)
+	}
+	for _, name := range preserve {
+		src := filepath.Join(dir, name)
+		if fi, err := os.Stat(src); err == nil && fi.Mode().IsRegular() {
+			if err := copyFile(src, filepath.Join(staging, name)); err != nil {
+				return fmt.Errorf("preserving %s: %w", name, err)
+			}
+		}
+	}
+	if version != "" {
+		ver := strings.TrimPrefix(version, "v")
+		if err := os.WriteFile(filepath.Join(staging, versionMarkerFile), []byte(ver+"\n"), 0o644); err != nil {
+			return fmt.Errorf("writing version marker: %w", err)
+		}
+	}
+	backup := ""
+	if runnerExists(dir) {
+		backup = dir + ".old-" + time.Now().UTC().Format("20060102150405.000000000")
+		if err := os.Rename(dir, backup); err != nil {
+			return fmt.Errorf("moving %s aside before install: %w", dir, err)
+		}
+	}
+	if err := os.Rename(staging, dir); err != nil {
+		// Roll back: put the previous install back if we created one.
+		if backup != "" {
+			_ = os.Rename(backup, dir)
+		}
+		return fmt.Errorf("installing %s: %w", dir, err)
+	}
+	committed = true
+	if backup != "" {
+		_ = os.RemoveAll(backup)
+	}
+	return nil
+}
+
+// installedRunnerVersion returns the actions/runner version recorded in
+// the version marker, or "" when the marker is absent (fresh or
+// hand-installed dir).
+func installedRunnerVersion(dir string) string {
+	data, err := os.ReadFile(filepath.Join(dir, versionMarkerFile))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
+}
+
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	fi, err := in.Stat()
+	if err != nil {
+		return err
+	}
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, fi.Mode().Perm())
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		out.Close()
+		return err
+	}
+	return out.Close()
+}
+
 // extractArchive unpacks a .tar.gz or .zip actions-runner archive into dir.
 // Pure archive/zip + archive/tar replace the old `tar` + 7za shell-outs, so
 // no external unzip tool is required. Paths are validated (no ".." escape).
