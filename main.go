@@ -31,7 +31,7 @@ func main() {
 	// run prints errors to stderr (errors are never suppressed by --quiet;
 	// --quiet only suppresses status logs), so main only maps the error to
 	// an exit code.
-	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
+	if err := run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr); err != nil {
 		os.Exit(exitCode(err))
 	}
 }
@@ -105,15 +105,15 @@ func (f nameFlag) Set(s string) error {
 	return nil
 }
 
-func run(args []string, stdout, stderr io.Writer) error {
-	err := runInner(args, stdout, stderr)
+func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+	err := runInner(args, stdin, stdout, stderr)
 	if err != nil && !isReported(err) {
 		fmt.Fprintln(stderr, "runner-spawner:", err)
 	}
 	return err
 }
 
-func runInner(args []string, stdout, stderr io.Writer) error {
+func runInner(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
 		printUsage(stderr)
 		return &codedError{code: 2, msg: "missing subcommand"}
@@ -127,6 +127,8 @@ func runInner(args []string, stdout, stderr io.Writer) error {
 		return nil
 	case "create", "remove", "start", "stop", "status", "list":
 		return runVerb(args[0], args[1:], stdout, stderr)
+	case "init":
+		return runInit(args[1:], stdin, stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "unknown subcommand %q\n\n", args[0])
 		printUsage(stderr)
@@ -146,6 +148,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  stop     Stop runner service(s)")
 	fmt.Fprintln(w, "  status   Show per-runner service state")
 	fmt.Fprintln(w, "  list     List runners (config names + on-disk dirs)")
+	fmt.Fprintln(w, "  init     Write a .runner-spawner.json for this repository")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Global flags (accepted by every subcommand):")
 	fmt.Fprintln(w, "  --config PATH        path to .runner-spawner.json (auto-discovered by default)")
@@ -176,7 +179,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  RUNNER_SPAWNER_DRY_RUN, RUNNER_SPAWNER_FORMAT, RUNNER_SPAWNER_QUIET.")
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "Supported platforms: macOS and Windows. Linux is not yet supported.")
-	fmt.Fprintln(w, "See README.md for .runner-spawner.json and examples.")
+	fmt.Fprintln(w, "See README.md for .runner-spawner.json (or run `runner-spawner init`).")
 }
 
 func runVerb(verb string, args []string, stdout, stderr io.Writer) error {

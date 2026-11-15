@@ -140,6 +140,7 @@ func TestValidate(t *testing.T) {
 
 func TestFindConfigFile(t *testing.T) {
 	dir := t.TempDir()
+	chdir(t, dir)
 	if got := FindConfigFile(dir); got != "" {
 		t.Fatalf("FindConfigFile(empty) = %q, want \"\"", got)
 	}

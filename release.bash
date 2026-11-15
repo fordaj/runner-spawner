@@ -3,17 +3,17 @@
 #
 # Uses the bundled versioner to compute the next tag, cross-compiles the
 # release binaries for injection (ldflags toolVersion=$TAG), packs each
-# architecture into RunnerSpawner_<tag>_<arch>.7z (binary + README +
-# example config), tags HEAD, and publishes a GitHub release with the
-# .7z archives + SHA-256 checksums. The bundled tools/runner-spawner/
-# binaries are refreshed afterwards with tools/runner-spawner/update.bash.
+# architecture into RunnerSpawner_<tag>_<arch>.tar.gz (.zip on Windows;
+# flat archives: binary + README + LICENSE), tags HEAD, and publishes a
+# GitHub release with those archives + SHA-256 checksums. The bundled
+# tools/runner-spawner/ binaries are refreshed afterwards with
+# tools/runner-spawner/update.bash.
 #
 # Usage:
 #   ./release.bash           # tag + push + GitHub release
 #   ./release.bash --dry-run # compute + build only, touch nothing remote
 #
-# Prerequisites: go, git, 7z (brew install p7zip / apt install
-# p7zip-full / winget install 7zip.7zip), bundled versioner
+# Prerequisites: go, git, tar, zip, bundled versioner
 # (tools/versioner/update.bash), and (for the real release) gh
 # authenticated via `gh auth login`. Working tree
 # must be clean; HEAD should be pushed. make is NOT required: the
@@ -32,9 +32,9 @@ Compute the next version with the bundled versioner (see
 tools/versioner/update.bash), cross-compile the release binaries
 into dist/<arch>/runner-spawner[.exe] (same target matrix as the
 Makefile's `cross` target), pack each into
-RunnerSpawner_<tag>_<arch>.7z (binary + README.md +
-runner-spawner.example.json), create an annotated tag, push it, and
-create a GitHub release with the .7z archives + checksums.
+RunnerSpawner_<tag>_<arch>.tar.gz (.zip on Windows; binary + README.md +
+LICENSE), create an annotated tag, push it, and
+create a GitHub release with the archives + checksums.
 
 Flags:
   --dry-run, -n   Build + compute version, but do not tag/push/release.
@@ -73,26 +73,7 @@ need_cmd() {
     command -v "$1" >/dev/null 2>&1 || die "required command not found: $1"
 }
 
-for cmd in git go; do need_cmd "$cmd"; done
-
-if command -v 7zz >/dev/null 2>&1; then
-    SEVENZIP=7zz
-elif command -v 7z >/dev/null 2>&1; then
-    SEVENZIP=7z
-else
-    # Windows: 7-Zip is not on PATH by default. Probe the usual install
-    # locations (Program Files for winget/official MSI; Chocolatey and
-    # Scoop put a 7z on PATH themselves, so PATH hits above cover them).
-    SEVENZIP=""
-    for cand in \
-        "/c/Program Files/7-Zip/7z.exe" \
-        "/c/Program Files (x86)/7-Zip/7z.exe"; do
-        [[ -x "$cand" ]] && SEVENZIP="$cand" && break
-    done
-    if [[ -z "$SEVENZIP" ]]; then
-        die "required command not found: 7z/7zz (brew install p7zip / apt-get install p7zip-full / winget install 7zip.7zip)"
-    fi
-fi
+for cmd in git go tar zip; do need_cmd "$cmd"; done
 
 if [[ "$DRY_RUN" -ne 1 ]]; then
     need_cmd gh
@@ -234,10 +215,10 @@ arch_dirs=(dist/*/)
 log "built ${#arch_dirs[@]} architecture directories:"
 for d in "${arch_dirs[@]}"; do log "  $d"; done
 
-# Stage user docs next to each binary for inclusion in the .7z archives.
+# Stage user docs next to each binary for inclusion in the release archives.
 for d in "${arch_dirs[@]}"; do
-    for doc in README.md runner-spawner.example.json; do
-        [[ -f "$doc" ]] || die "missing $doc (needed for .7z archives)"
+    for doc in README.md LICENSE; do
+        [[ -f "$doc" ]] || die "missing $doc (needed for release archives)"
         cp -p "$doc" "$d/"
     done
 done
@@ -259,9 +240,10 @@ if [[ -x "$NATIVE_BIN" ]]; then
     esac
 fi
 
-# Pack each architecture into RunnerSpawner_<tag>_<arch>.7z (flat: binary
-# + README.md + runner-spawner.example.json at archive root).
-log "packing .7z archives with $SEVENZIP..."
+# Pack each architecture into a platform-native archive (flat: binary
+# + README.md + LICENSE at archive root). Unix targets get .tar.gz,
+# Windows targets get .zip.
+log "packing platform-native archives..."
 archives=()
 for d in "${arch_dirs[@]}"; do
     arch="$(basename "$d")"
@@ -272,21 +254,35 @@ for d in "${arch_dirs[@]}"; do
     [[ -n "$bin" ]] || die "no runner-spawner binary in $d"
     [[ -s "$bin" ]] || die "built binary is empty: $bin"
     bin_name="$(basename "$bin")"
-    archive="dist/RunnerSpawner_${TAG}_${arch}.7z"
-    rm -f "$archive"
-    (cd "$d" && "$SEVENZIP" a -t7z "../RunnerSpawner_${TAG}_${arch}.7z" "$bin_name" README.md runner-spawner.example.json >/dev/null)
+    case "$arch" in
+    windows-*)
+        extension="zip"
+        archive="dist/RunnerSpawner_${TAG}_${arch}.zip"
+        rm -f "$archive"
+        (cd "$d" && zip -q -j "../RunnerSpawner_${TAG}_${arch}.zip" "$bin_name" README.md LICENSE)
+        ;;
+    *)
+        extension="tar.gz"
+        archive="dist/RunnerSpawner_${TAG}_${arch}.tar.gz"
+        rm -f "$archive"
+        (cd "$d" && tar -czf "../RunnerSpawner_${TAG}_${arch}.tar.gz" "$bin_name" README.md LICENSE)
+        ;;
+    esac
     [[ -s "$archive" ]] || die "failed to create $archive"
     log "  $archive:"
-    "$SEVENZIP" l "$archive" | sed 's/^/release.bash:     /'
+    case "$extension" in
+    zip) unzip -l "$archive" | sed 's/^/release.bash:     /' ;;
+    *) tar -tzf "$archive" | sed 's/^/release.bash:     /' ;;
+    esac
     archives+=("$archive")
 done
 
-# Checksums of the .7z archives (portable shasum; sha256sum fallback).
+# Checksums of the release archives (portable shasum; sha256sum fallback).
 log "generating checksums..."
 if command -v shasum >/dev/null 2>&1; then
-    (cd dist && shasum -a 256 RunnerSpawner_*.7z >checksums.txt)
+    (cd dist && shasum -a 256 RunnerSpawner_* >checksums.txt)
 elif command -v sha256sum >/dev/null 2>&1; then
-    (cd dist && sha256sum RunnerSpawner_*.7z >checksums.txt)
+    (cd dist && sha256sum RunnerSpawner_* >checksums.txt)
 else
     die "neither shasum nor sha256sum found (need one for checksums)"
 fi
@@ -297,7 +293,7 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
     log "DRY RUN: would run:"
     log "  git tag -a $TAG -m \"runner-spawner $TAG\""
     log "  git push origin $TAG"
-    log "  gh release create $TAG --title \"runner-spawner $TAG\" --generate-notes dist/RunnerSpawner_*.7z dist/checksums.txt"
+    log "  gh release create $TAG --title \"runner-spawner $TAG\" --generate-notes dist/RunnerSpawner_* dist/checksums.txt"
     log "  tools/runner-spawner/update.bash   # refresh the bundle"
     log "dry run complete: VERSION=$VERSION TAG=$TAG"
     exit 0
@@ -310,10 +306,10 @@ log "pushing tag $TAG..."
 git push origin "$TAG"
 
 if gh release view "$TAG" >/dev/null 2>&1; then
-    die "GitHub release $TAG already exists (tag was pushed; upload assets manually with: gh release upload $TAG dist/RunnerSpawner_*.7z dist/checksums.txt --clobber)"
+    die "GitHub release $TAG already exists (tag was pushed; upload assets manually with: gh release upload $TAG dist/RunnerSpawner_* dist/checksums.txt --clobber)"
 fi
 
-log "creating GitHub release $TAG with ${#archives[@]} .7z archives + checksums..."
+log "creating GitHub release $TAG with ${#archives[@]} archives + checksums..."
 gh release create "$TAG" \
     --title "runner-spawner $TAG" \
     --generate-notes \
