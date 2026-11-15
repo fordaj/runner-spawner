@@ -13,11 +13,11 @@ import (
 // repo clones (two of them clones of the same repository), and redirects
 // nothing else. Discovery tests work directly on the registry + markers.
 type installTestEnv struct {
-	cfgDir  string
-	repoA   string // clone 1 of acme/repoa
-	repoA2  string // clone 2 of acme/repoa (different working directory)
-	repoB   string // unrelated repo acme/repob
-	plat    platform
+	cfgDir string
+	repoA  string // clone 1 of acme/repoa
+	repoA2 string // clone 2 of acme/repoa (different working directory)
+	repoB  string // unrelated repo acme/repob
+	plat   platform
 }
 
 func newInstallTestEnv(t *testing.T) *installTestEnv {

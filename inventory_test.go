@@ -71,10 +71,10 @@ func TestInventoryRepoScope(t *testing.T) {
 		t.Fatalf("runInventory: %v (stderr: %s)", err, stderr.String())
 	}
 	var decoded struct {
-		Scope    string            `json:"scope"`
-		Target   string            `json:"target"`
-		OK       bool              `json:"ok"`
-		Runners  []InventoryRunner `json:"runners"`
+		Scope    string             `json:"scope"`
+		Target   string             `json:"target"`
+		OK       bool               `json:"ok"`
+		Runners  []InventoryRunner  `json:"runners"`
 		Failures []InventoryFailure `json:"failures"`
 	}
 	if err := json.Unmarshal(stdout.Bytes(), &decoded); err != nil {
@@ -140,9 +140,9 @@ func TestInventoryOrgScope(t *testing.T) {
 		t.Fatal(err)
 	}
 	var decoded struct {
-		Runners  []InventoryRunner `json:"runners"`
+		Runners  []InventoryRunner  `json:"runners"`
 		Failures []InventoryFailure `json:"failures"`
-		OK       bool              `json:"ok"`
+		OK       bool               `json:"ok"`
 	}
 	if err := json.Unmarshal(stdout.Bytes(), &decoded); err != nil {
 		t.Fatal(err)
@@ -176,7 +176,7 @@ func TestInventoryOrgScopeReportsFailure(t *testing.T) {
 	}
 	var decoded struct {
 		Failures []InventoryFailure `json:"failures"`
-		OK       bool              `json:"ok"`
+		OK       bool               `json:"ok"`
 	}
 	if err := json.Unmarshal(stdout.Bytes(), &decoded); err != nil {
 		t.Fatal(err)
@@ -222,7 +222,7 @@ func TestInventoryOwnerAggregatesUser(t *testing.T) {
 		t.Fatal("expected error: one repo failed")
 	}
 	var decoded struct {
-		Runners  []InventoryRunner `json:"runners"`
+		Runners  []InventoryRunner  `json:"runners"`
 		Failures []InventoryFailure `json:"failures"`
 	}
 	if err := json.Unmarshal(stdout.Bytes(), &decoded); err != nil {
@@ -268,9 +268,9 @@ func TestInventoryOwnerAggregatesOrg(t *testing.T) {
 		t.Fatalf("runInventory: %v", err)
 	}
 	var decoded struct {
-		Runners  []InventoryRunner `json:"runners"`
+		Runners  []InventoryRunner  `json:"runners"`
 		Failures []InventoryFailure `json:"failures"`
-		OK       bool              `json:"ok"`
+		OK       bool               `json:"ok"`
 	}
 	if err := json.Unmarshal(stdout.Bytes(), &decoded); err != nil {
 		t.Fatal(err)

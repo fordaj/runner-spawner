@@ -69,8 +69,8 @@ type fakeExecutor struct {
 	// Per-runner-dir failure injection, keyed on the working directory
 	// the script runs in. Lets batch tests fail exactly one installation
 	// while others succeed.
-	FailSvcStartDirs map[string]error
-	FailSvcStopDirs  map[string]error
+	FailSvcStartDirs  map[string]error
+	FailSvcStopDirs   map[string]error
 	FailSvcStatusDirs map[string]error
 
 	// Scripted `gh api <endpoint>` responses, keyed on the endpoint
@@ -78,7 +78,7 @@ type fakeExecutor struct {
 	// its value). Consulted before the built-in registration/
 	// deregistration handlers, so inventory tests can script any
 	// endpoint. gh --version always succeeds in the fake.
-	GitHubResponses map[string]fakeGitHubResponse
+	GitHubResponses   map[string]fakeGitHubResponse
 	GitHubTokenErr    error
 	GitHubListIDs     []string
 	GitHubListErr     error
