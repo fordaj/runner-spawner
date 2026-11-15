@@ -12,10 +12,13 @@
 #   ./release.bash           # tag + push + GitHub release
 #   ./release.bash --dry-run # compute + build only, touch nothing remote
 #
-# Prerequisites: go, git, make, 7z (brew install p7zip / apt install
-# p7zip-full), bundled versioner (tools/versioner/update.bash), and (for
-# the real release) gh authenticated via `gh auth login`. Working tree
-# must be clean; HEAD should be pushed.
+# Prerequisites: go, git, 7z (brew install p7zip / apt install
+# p7zip-full / winget install 7zip.7zip), bundled versioner
+# (tools/versioner/update.bash), and (for the real release) gh
+# authenticated via `gh auth login`. Working tree
+# must be clean; HEAD should be pushed. make is NOT required: the
+# cross-compile loop below is self-contained (the Makefile's `cross`
+# target is kept for convenience on Unix dev machines).
 
 set -euo pipefail
 
@@ -26,8 +29,9 @@ usage() {
 Usage: ./release.bash [--dry-run]
 
 Compute the next version with the bundled versioner (see
-tools/versioner/update.bash), cross-compile the release binaries (see
-Makefile `cross`) into dist/<arch>/runner-spawner[.exe], pack each into
+tools/versioner/update.bash), cross-compile the release binaries
+into dist/<arch>/runner-spawner[.exe] (same target matrix as the
+Makefile's `cross` target), pack each into
 RunnerSpawner_<tag>_<arch>.7z (binary + README.md +
 runner-spawner.example.json), create an annotated tag, push it, and
 create a GitHub release with the .7z archives + checksums.
@@ -69,14 +73,26 @@ need_cmd() {
     command -v "$1" >/dev/null 2>&1 || die "required command not found: $1"
 }
 
-for cmd in git go make; do need_cmd "$cmd"; done
+for cmd in git go; do need_cmd "$cmd"; done
 
 if command -v 7zz >/dev/null 2>&1; then
     SEVENZIP=7zz
 elif command -v 7z >/dev/null 2>&1; then
     SEVENZIP=7z
 else
-    die "required command not found: 7z/7zz (brew install p7zip / apt-get install p7zip-full)"
+    # Windows: 7-Zip is not on PATH by default. Probe the usual install
+    # locations (Program Files for winget/official MSI; Chocolatey and
+    # Scoop put a 7z on PATH themselves, so PATH hits above cover them).
+    SEVENZIP=""
+    for cand in \
+        "/c/Program Files/7-Zip/7z.exe" \
+        "/c/Program Files (x86)/7-Zip/7z.exe" \
+    ; do
+        [[ -x "$cand" ]] && SEVENZIP="$cand" && break
+    done
+    if [[ -z "$SEVENZIP" ]]; then
+        die "required command not found: 7z/7zz (brew install p7zip / apt-get install p7zip-full / winget install 7zip.7zip)"
+    fi
 fi
 
 if [[ "$DRY_RUN" -ne 1 ]]; then
@@ -187,12 +203,34 @@ if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; the
 fi
 
 # --- Cross-compile release binaries -----------------------------------
-log "cross-compiling release binaries (VERSION=$TAG) via make cross..."
-VERSION="$TAG" make cross
+# Self-contained loop mirroring the Makefile's `cross` target — make is
+# not required (it is absent on most Windows hosts).
+log "cross-compiling release binaries (VERSION=$TAG)..."
+CROSS_TARGETS=(
+    "darwin amd64"
+    "darwin arm64"
+    "linux amd64"
+    "linux arm64"
+    "windows amd64"
+    "windows arm64"
+)
+mkdir -p dist
+for target in "${CROSS_TARGETS[@]}"; do
+    set -- $target
+    goos="$1"; goarch="$2"
+    arch="$goos-$goarch"
+    bin="runner-spawner"
+    if [[ "$goos" == "windows" ]]; then bin="runner-spawner.exe"; fi
+    mkdir -p "dist/$arch"
+    log "building $arch -> dist/$arch/$bin"
+    CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" go build \
+        -trimpath -ldflags="-X main.toolVersion=$TAG" \
+        -o "dist/$arch/$bin" .
+done
 
 shopt -s nullglob
 arch_dirs=(dist/*/)
-((${#arch_dirs[@]} > 0)) || die "make cross produced no dist/<arch>/ directories"
+((${#arch_dirs[@]} > 0)) || die "cross-compile produced no dist/<arch>/ directories"
 log "built ${#arch_dirs[@]} architecture directories:"
 for d in "${arch_dirs[@]}"; do log "  $d"; done
 
