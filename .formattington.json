@@ -6,11 +6,11 @@
       "shfmt",
       "-i",
       "4",
-      "format.bash",
+      "format.sh",
       "scripts/release.sh",
-      "ci/format_check.bash",
+      "ci/format_check.sh",
       "scripts/entry.sh",
-      "scripts/version.bash"
+      "scripts/version.sh"
     ]
   ]
 }

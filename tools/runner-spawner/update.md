@@ -8,11 +8,11 @@
 
 The pinned binary selection goes through the [env cascade](../../scripts/env.md) (`RUNNER_SPAWNER_BIN`). The bundle refresh deliberately uses a different variable name — `RUNNER_SPAWNER_TOOL_REPO` (set in `.common.env`, defaulting to `fordaj/runner-spawner`) — because `RUNNER_SPAWNER_REPO` is this CLI's own env var for the *target* repository a runner should be created for. Do not confuse the two.
 
-## `update.bash` in detail
+## `update.sh` in detail
 
 Refreshes from `fordaj/runner-spawner` releases: platform archives (stem ends in `<os>-<arch>`; `.tar.gz` on macOS/Linux, `.zip` on Windows, legacy `.7z` accepted), mapped onto the bundle layout, into `v<tag>/<platform>/`. **Verification is mandatory: a release with no `checksums.txt`/`SHA256SUMS.txt` aborts the refresh** — the one bundle here that refuses unverified binaries. Only the binary is kept. Stages into a temporary directory inside the bundle, swaps in atomically, prunes superseded `v*/` folders only after the new one is staged, and smoke-tests the host binary (`runner-spawner --version`). Environment overrides: `RUNNER_SPAWNER_TOOL_REPO`, `RUNNER_SPAWNER_TAG`. `--dry-run` lists planned assets without touching anything.
 
-`scripts/release.sh` prints a reminder to refresh this bundle with `tools/runner-spawner/update.bash` after publishing a release.
+`scripts/release.sh` prints a reminder to refresh this bundle with `tools/runner-spawner/update.sh` after publishing a release.
 
 ## Related pages
 

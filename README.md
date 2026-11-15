@@ -342,8 +342,8 @@ use (LaunchAgent load prompts).
 ```bash
 make build|test|vet|cross   # `cross` emits dist/<goos>-<goarch>/
 ./scripts/release.sh --dry-run    # compute next tag + build, touch nothing remote
-./format.bash               # format: prettier + goimports + shfmt
-./ci/format_check.bash      # check formatting without modifying (CI)
+./format.sh               # format: prettier + goimports + shfmt
+./ci/format_check.sh      # check formatting without modifying (CI)
 ```
 
 `go test ./...` runs fully offline: lifecycle/crash-resume tests use
@@ -356,7 +356,7 @@ covered without network or real services.
 
 Formatting is delegated to
 [formattington](https://github.com/fordaj/formattington) via
-`./format.bash` / `./ci/format_check.bash`. Scope (`.formattington.json`):
+`./format.sh` / `./ci/format_check.sh`. Scope (`.formattington.json`):
 `*.md`/`*.json` → `prettier`, `*.go` → `goimports` (gofmt + import
 fixing), `*.sh`/`*.bash` → `shfmt -i 4` (with `scripts/env.sh`
 excluded: it intentionally contains zsh-only syntax that no
@@ -365,7 +365,7 @@ shell files explicitly). Formattington is pinned in
 `pyproject.toml` (`dbed7479…`, the first commit with Go support) and
 locked in `uv.lock`; `uv run` creates `.venv/` automatically. Style is
 configured by `.prettierrc`. Prerequisites (`uv`, Go with
-`goimports` on `PATH`, `shfmt`, `prettier`) are listed in `format.bash`.
+`goimports` on `PATH`, `shfmt`, `prettier`) are listed in `format.sh`.
 
 ## Repository layout
 
@@ -375,15 +375,15 @@ configured by `.prettierrc`. Prerequisites (`uv`, Go with
   token.go, runner.go, verbs.go, script.go, install.go, inventory.go,
   scope.go, *_test.go
   Makefile  scripts/release.sh  .runner-spawner.json  .versioner.json
-  format.bash  ci/format_check.bash  pyproject.toml  uv.lock
+  format.sh  ci/format_check.sh  pyproject.toml  uv.lock
   .formattington.json  .prettierrc  .python-version  LICENSE
   scripts/  env.sh + .common.env + .<platform>.env (cascade + log())
   tools/
-    versioner/    v*/<platform>/versioner[.exe]   + update.bash
-    logamuffin/   v*/<platform>/logamuffin[.exe]  + update.bash
-    runner-spawner/ v*/<platform>/runner-spawner[.exe]  + update.bash
-    barnacle/     v*/<platform>/barnacle[.exe]    + update.bash
-    formattington-lite/ v*/<platform>/formattington[.exe] + update.bash
+    versioner/    v*/<platform>/versioner[.exe]   + update.sh
+    logamuffin/   v*/<platform>/logamuffin[.exe]  + update.sh
+    runner-spawner/ v*/<platform>/runner-spawner[.exe]  + update.sh
+    barnacle/     v*/<platform>/barnacle[.exe]    + update.sh
+    formattington-lite/ v*/<platform>/formattington[.exe] + update.sh
 ```
 
 - `make build|test|vet|cross`. `cross` emits `dist/<goos>-<goarch>/`.
@@ -391,7 +391,7 @@ configured by `.prettierrc`. Prerequisites (`uv`, Go with
   cross-compiles with `ldflags toolVersion=$TAG`, packs
   `RunnerSpawner_<tag>_<arch>.tar.gz` (`.zip` on Windows; + checksums), tags, and publishes
   the GitHub release. `--dry-run` touches nothing remote.
-- `tools/runner-spawner/update.bash` downloads the latest release,
+- `tools/runner-spawner/update.sh` downloads the latest release,
   verifies checksums, extracts each platform binary into
   `tools/runner-spawner/<tag>/<platform>/`, and prunes old versions —
   leaving the bundle intact on failure. `scripts/env.sh` then exposes
@@ -409,7 +409,7 @@ name.
 
 `.github/workflows/ci.yml` runs on **self-hosted runners only** (this repo
 is the tool that provisions them — no GitHub-hosted compute, and no Linux
-job). Two jobs: `Check Formatting` (`./ci/format_check.bash` after installing
+job). Two jobs: `Check Formatting` (`./ci/format_check.sh` after installing
 uv, prettier, shfmt and goimports) and `Test` (`go vet ./...`, a `gofmt`
 check, `go test ./...`). Jobs currently target `runs-on: [self-hosted,
 Windows]` while the macOS runners are unavailable (see

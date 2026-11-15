@@ -20,16 +20,16 @@ runner-spawner is a Go CLI (`package main` at the repository root) for installin
 make build|test|vet|cross   # Makefile; `cross` emits dist/<goos>-<goarch>/
 go test ./...               # same as `make test`; fully offline
 go vet ./...                # same as `make vet`
-./format.bash               # format in place (prettier + goimports + shfmt)
-./ci/format_check.bash      # check formatting only (CI)
+./format.sh               # format in place (prettier + goimports + shfmt)
+./ci/format_check.sh      # check formatting only (CI)
 ./scripts/release.sh --dry-run   # compute next tag + cross-compile; touch nothing remote
-scripts/version.bash        # print the version computed by versioner
+scripts/version.sh        # print the version computed by versioner
 scripts/docs.sh             # regenerate ./site (barnacle; git-ignored)
 ```
 
 Tests live next to the code as `*_test.go` (standard `testing`). Lifecycle/crash-resume tests use `fake_exec_test.go`, a fake `commandExecution` that records `svc.sh`/`config.sh`/`sc.exe`/`gh` invocations; unit tests point discovery at temp trees. The suite requires no network access.
 
-Before considering a change complete: run `make vet` and `go test ./...`; verify CLI argument parsing and exit behavior when touching `main.go`; keep `./ci/format_check.bash` clean when touching shell/markdown/Go formatting scope; check paths with spaces where filesystem or subprocess behavior changes; test missing executables and partial-state re-runs when relevant. Do not invent commands for tools that are not configured.
+Before considering a change complete: run `make vet` and `go test ./...`; verify CLI argument parsing and exit behavior when touching `main.go`; keep `./ci/format_check.sh` clean when touching shell/markdown/Go formatting scope; check paths with spaces where filesystem or subprocess behavior changes; test missing executables and partial-state re-runs when relevant. Do not invent commands for tools that are not configured.
 
 ## Repository Layout
 
@@ -40,13 +40,13 @@ Before considering a change complete: run `make vet` and `go test ./...`; verify
   verbs.go         # create/remove/start/stop/status/list implementation
   archive.go       # runner archive download + atomic extraction (staging dir + rename)
   ...              # one sibling <name>.md per Go file (see below)
-  format.bash      # repo formatting entry point (uv + formattington)
+  format.sh      # repo formatting entry point (uv + formattington)
   Makefile         # build/test/vet/cross
   scripts/         # entry.sh, env.sh, .common.env + .<platform>.env cascade, release.sh,
-                   # version.bash, docs.sh
-  tools/           # pinned helper binaries + update.bash: barnacle, formattington-lite,
+                   # version.sh, docs.sh
+  tools/           # pinned helper binaries + update.sh: barnacle, formattington-lite,
                    # logamuffin, runner-spawner, versioner
-  ci/              # format_check.bash (check-only counterpart of format.bash)
+  ci/              # format_check.sh (check-only counterpart of format.sh)
   dist/            # build output (git-ignored)
   .runner-spawner.json  # this repo's own runner config (dogfooding)
   site/            # generated documentation site (git-ignored)
@@ -61,8 +61,8 @@ The repository's documentation is a set of Markdown (`.md`) and Mermaid (`.mmd`)
 Layout — documentation lives next to the code it describes:
 
 - One sibling `.md` per non-test Go source file at the repository root (`main.go` → [main.md](main.md), `verbs.go` → [verbs.md](verbs.md), …). **One page covers a platform split**: [lock.md](lock.md) documents `lock.go`, `lock_unix.go` and `lock_windows.go` together rather than three near-identical pages.
-- One sibling `.md` per root shell script (`format.bash` → [format.md](format.md)).
-- One sibling `.md` per script (`scripts/entry.sh` → `entry.md`, `scripts/env.sh` → `env.md`, `scripts/release.sh` → `release.md`, `scripts/version.bash` → `version.md`, `scripts/docs.sh` → `docs.md`), plus [scripts/README.md](scripts/README.md) as the hub.
+- One sibling `.md` per root shell script (`format.sh` → [format.md](format.md)).
+- One sibling `.md` per script (`scripts/entry.sh` → `entry.md`, `scripts/env.sh` → `env.md`, `scripts/release.sh` → `release.md`, `scripts/version.sh` → `version.md`, `scripts/docs.sh` → `docs.md`), plus [scripts/README.md](scripts/README.md) as the hub.
 - One `update.md` per bundle in `tools/` (`tools/<name>/update.md`), plus [tools/README.md](tools/README.md) as the hub.
 - Test files (`*_test.go`) are deliberately not documented.
 

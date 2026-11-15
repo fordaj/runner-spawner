@@ -7,14 +7,14 @@
 # flat archives: binary + README + LICENSE), tags HEAD, and publishes a
 # GitHub release with those archives + SHA-256 checksums. The bundled
 # tools/runner-spawner/ binaries are refreshed afterwards with
-# tools/runner-spawner/update.bash.
+# tools/runner-spawner/update.sh.
 #
 # Usage:
 #   scripts/release.sh           # tag + push + GitHub release
 #   scripts/release.sh --dry-run # compute + build only, touch nothing remote
 #
 # Prerequisites: go, git, tar, zip, bundled versioner
-# (tools/versioner/update.bash), and (for the real release) gh
+# (tools/versioner/update.sh), and (for the real release) gh
 # authenticated via `gh auth login`. Working tree
 # must be clean; HEAD should be pushed. make is NOT required: the
 # cross-compile loop below is self-contained (the Makefile's `cross`
@@ -29,7 +29,7 @@ usage() {
 Usage: scripts/release.sh [--dry-run]
 
 Compute the next version with the bundled versioner (see
-tools/versioner/update.bash), cross-compile the release binaries
+tools/versioner/update.sh), cross-compile the release binaries
 into dist/<arch>/runner-spawner[.exe] (same target matrix as the
 Makefile's `cross` target), pack each into
 RunnerSpawner_<tag>_<arch>.tar.gz (.zip on Windows; binary + README.md +
@@ -154,7 +154,7 @@ else
         if command -v versioner >/dev/null 2>&1; then
             DOGFOOD_BIN=$(command -v versioner)
         else
-            die "no bundled versioner under tools/versioner and none on PATH (run: tools/versioner/update.bash)"
+            die "no bundled versioner under tools/versioner and none on PATH (run: tools/versioner/update.sh)"
         fi
     fi
     log "using bundled versioner: $DOGFOOD_BIN"
@@ -294,7 +294,7 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
     log "  git tag -a $TAG -m \"runner-spawner $TAG\""
     log "  git push origin $TAG"
     log "  gh release create $TAG --title \"runner-spawner $TAG\" --generate-notes dist/RunnerSpawner_* dist/checksums.txt"
-    log "  tools/runner-spawner/update.bash   # refresh the bundle"
+    log "  tools/runner-spawner/update.sh   # refresh the bundle"
     log "dry run complete: VERSION=$VERSION TAG=$TAG"
     exit 0
 fi
@@ -321,4 +321,4 @@ else
     log "release $TAG created (see GitHub Releases)"
 fi
 
-log "refresh the bundle with: tools/runner-spawner/update.bash --repo <slug-for-$TAG>"
+log "refresh the bundle with: tools/runner-spawner/update.sh --repo <slug-for-$TAG>"
