@@ -734,7 +734,7 @@ func TestMutationResultJSONShape(t *testing.T) {
 	var buf strings.Builder
 	cfg := DefaultConfig()
 	cfg.Owner, cfg.Repo = "acme", "widgets"
-	err := writeMutationJSON(&buf, cfg, []mutationResult{{Name: "runner01", OK: true}})
+	err := writeMutationJSON(&buf, cfg, "directory", []mutationResult{{Name: "runner01", OK: true}})
 	if err != nil {
 		t.Fatal(err)
 	}

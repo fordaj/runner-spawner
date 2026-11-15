@@ -18,6 +18,7 @@ type runnerStatus struct {
 	ServiceState string `json:"serviceState"` // running|stopped|pending|not-installed|unknown|unsupported
 	Display      string `json:"display"`
 	Hint         string `json:"hint,omitempty"` // remediation hint when not healthy
+	Repo         string `json:"repo,omitempty"` // owner/repo; set for --scope repo|pc discovery
 }
 
 // statusOne inspects one runner dir without mutating anything.
@@ -300,7 +301,34 @@ func createOne(cfg *Config, p platform, name string, stdout, stderr io.Writer) e
 	if st := queryServiceState(cfg, p, dir, name); st != "running" {
 		return fmt.Errorf("post-check failed: service for %s is %q after create — run `runner-spawner start --name %s` and check its logs", displayName(name), st, name)
 	}
+	// 5) Record installation metadata for pc/repo-scope discovery.
+	if !cfg.DryRun {
+		if err := recordInstallation(cfg, p, name, dir); err != nil {
+			warnf(fmt.Sprintf("could not record installation metadata for %s (%v) — the runner works, but `list --scope pc` will not find it", displayName(name), err))
+		}
+	}
 	logf(fmt.Sprintf("created %s", displayName(name)))
+	return nil
+}
+
+// recordInstallation writes/refreshes the install marker and the
+// machine registry entry for an installation. Registration metadata is
+// what lets `list`/`status`/`start`/`stop --scope pc` find this
+// installation later. A failure here does not fail create — the
+// installation itself is healthy — but pc-scope discovery will miss it,
+// so the caller surfaces a warning.
+func recordInstallation(cfg *Config, p platform, name, dir string) error {
+	created := ""
+	if existing, err := readInstallMarker(dir); err == nil && existing.Tool == installTool {
+		created = existing.CreatedAt
+	}
+	meta := buildInstallationMeta(cfg, p, name, dir, created)
+	if err := writeInstallMarker(dir, meta); err != nil {
+		return fmt.Errorf("writing %s: %w", installMarkerFile, err)
+	}
+	if err := registerInstallation(meta); err != nil {
+		return fmt.Errorf("updating installation registry: %w", err)
+	}
 	return nil
 }
 
@@ -491,6 +519,11 @@ func removeOne(cfg *Config, p platform, name string, stdout, stderr io.Writer) e
 	}
 	if runnerExists(dir) {
 		return fmt.Errorf("post-check failed: %s still exists after remove", dir)
+	}
+	// Prune the install registry so stale entries do not accumulate.
+	// Best effort: a failure here must not fail the removal.
+	if err := unregisterInstallation(dir); err != nil {
+		warnf(fmt.Sprintf("could not remove %s from the installation registry: %v", dir, err))
 	}
 	if deregistered {
 		logf(fmt.Sprintf("removed %s", displayName(name)))
