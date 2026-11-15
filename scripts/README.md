@@ -13,6 +13,7 @@ Vernacular used in the headers (`log INFO`, `$REPO_ROOT_DIR`, `VERSIONER_BIN`): 
 ## Task scripts
 
 - [version.sh](version.md) — print the repository version computed by versioner (`--format text|shell|json`).
+- [format.sh](format.md) — format the repository in place with formattington.
 - [docs.sh](docs.md) — generate the documentation site you are reading, with the bundled barnacle.
 - [release.sh](release.md) — version, cross-compile, tag, and publish the GitHub release.
 

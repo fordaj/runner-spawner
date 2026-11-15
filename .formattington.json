@@ -6,7 +6,7 @@
       "shfmt",
       "-i",
       "4",
-      "format.sh",
+      "scripts/format.sh",
       "scripts/release.sh",
       "ci/format_check.sh",
       "scripts/entry.sh",

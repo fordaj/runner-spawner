@@ -342,7 +342,7 @@ use (LaunchAgent load prompts).
 ```bash
 make build|test|vet|cross   # `cross` emits dist/<goos>-<goarch>/
 ./scripts/release.sh --dry-run    # compute next tag + build, touch nothing remote
-./format.sh               # format: prettier + goimports + shfmt
+./scripts/format.sh               # format: prettier + goimports + shfmt
 ./ci/format_check.sh      # check formatting without modifying (CI)
 ```
 
@@ -356,7 +356,7 @@ covered without network or real services.
 
 Formatting is delegated to
 [formattington](https://github.com/fordaj/formattington) via
-`./format.sh` / `./ci/format_check.sh`. Scope (`.formattington.json`):
+`./scripts/format.sh` / `./ci/format_check.sh`. Scope (`.formattington.json`):
 `*.md`/`*.json` → `prettier`, `*.go` → `goimports` (gofmt + import
 fixing), `*.sh`/`*.bash` → `shfmt -i 4` (with `scripts/env.sh`
 excluded: it intentionally contains zsh-only syntax that no
@@ -365,7 +365,7 @@ shell files explicitly). Formattington is pinned in
 `pyproject.toml` (`dbed7479…`, the first commit with Go support) and
 locked in `uv.lock`; `uv run` creates `.venv/` automatically. Style is
 configured by `.prettierrc`. Prerequisites (`uv`, Go with
-`goimports` on `PATH`, `shfmt`, `prettier`) are listed in `format.sh`.
+`goimports` on `PATH`, `shfmt`, `prettier`) are listed in `scripts/format.sh`.
 
 ## Repository layout
 
@@ -375,7 +375,7 @@ configured by `.prettierrc`. Prerequisites (`uv`, Go with
   token.go, runner.go, verbs.go, script.go, install.go, inventory.go,
   scope.go, *_test.go
   Makefile  scripts/release.sh  .runner-spawner.json  .versioner.json
-  format.sh  ci/format_check.sh  pyproject.toml  uv.lock
+  scripts/format.sh  ci/format_check.sh  pyproject.toml  uv.lock
   .formattington.json  .prettierrc  .python-version  LICENSE
   scripts/  env.sh + .common.env + .<platform>.env (cascade + log())
   tools/
