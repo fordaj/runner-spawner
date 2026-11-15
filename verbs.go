@@ -69,7 +69,7 @@ func queryServiceState(cfg *Config, p platform, dir, name string) string {
 	if _, err := os.Stat(svc); err != nil {
 		return "unknown"
 	}
-	out, _ := runCmdCapture(svc, "status")
+	out, _ := runScriptCaptureInDir(svc, []string{"status"}, dir)
 	upper := strings.ToUpper(out)
 	switch {
 	case strings.Contains(upper, "RUNNING"):
@@ -351,7 +351,7 @@ func stopService(cfg *Config, p platform, dir, name string, logf func(string)) {
 		return
 	}
 	svc := serviceScript(dir, p)
-	if out, err := runScriptCapture(svc, "stop"); err != nil {
+	if out, err := runScriptCaptureInDir(svc, []string{"stop"}, dir); err != nil {
 		logf(fmt.Sprintf("warning: svc.sh stop failed for %s: %v: %s (continuing)", displayName(name), err, strings.TrimSpace(out)))
 	}
 }
@@ -366,7 +366,7 @@ func uninstallService(cfg *Config, p platform, dir, name string, logf func(strin
 		return
 	}
 	svc := serviceScript(dir, p)
-	if out, err := runScriptCapture(svc, "uninstall"); err != nil {
+	if out, err := runScriptCaptureInDir(svc, []string{"uninstall"}, dir); err != nil {
 		logf(fmt.Sprintf("warning: svc.sh uninstall failed for %s: %v: %s (continuing)", displayName(name), err, strings.TrimSpace(out)))
 	}
 }

@@ -3,25 +3,17 @@ package main
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 )
 
-// runCmd runs name+args inheriting stdio except that stdout is captured when
-// the caller needs it (see runCmdCapture). Used for svc.sh / sc.exe / net.
+// runCmd runs name+args inheriting stdio. Used for sc.exe / net.
 func runCmd(name string, args ...string) error {
-	cmd := exec.Command(name, args...)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	return commandExecution.Run(name, args, "")
 }
 
 // runCmdCapture runs name+args, returning combined output.
 func runCmdCapture(name string, args ...string) (string, error) {
-	cmd := exec.Command(name, args...)
-	out, err := cmd.CombinedOutput()
-	return string(out), err
+	return commandExecution.Output(name, args, "")
 }
 
 // runnerDirFor returns the install directory for a runner name.
@@ -51,6 +43,26 @@ func isConfigured(dir string) bool {
 	return err == nil
 }
 
+// isExtracted reports whether the pinned runner archive was unpacked well
+// enough for config.sh/svc.sh to run. A directory without config.sh (or
+// without svc.sh on Unix) is treated as empty/partial — the result of an
+// interrupted or failed extraction — and must be repaired by create.
+func isExtracted(dir string, p platform) bool {
+	cfgScript := configScript(dir, p)
+	fi, err := os.Stat(cfgScript)
+	if err != nil || !fi.Mode().IsRegular() {
+		return false
+	}
+	if !p.IsWindows {
+		svc := serviceScript(dir, p)
+		fi, err := os.Stat(svc)
+		if err != nil || !fi.Mode().IsRegular() {
+			return false
+		}
+	}
+	return true
+}
+
 // configScript returns the absolute path to the runner's config script.
 func configScript(dir string, p platform) string {
 	return filepath.Join(dir, p.ConfigBin)
@@ -65,4 +77,16 @@ func serviceScript(dir string, p platform) string {
 // actions.runner.<owner>-<repo>.<display>
 func windowsServiceName(cfg *Config, name string) string {
 	return fmt.Sprintf("actions.runner.%s-%s.%s", cfg.Owner, cfg.Repo, displayName(name))
+}
+
+// macosServiceLabel is the launchd label / plist basename the runner uses
+// on macOS: actions.runner.<owner>-<repo>.<display>
+func macosServiceLabel(cfg *Config, name string) string {
+	return fmt.Sprintf("actions.runner.%s-%s.%s", cfg.Owner, cfg.Repo, displayName(name))
+}
+
+// macosServicePlist returns the user-level LaunchAgent plist path for the
+// runner's service on macOS.
+func macosServicePlist(homeDir string, cfg *Config, name string) string {
+	return filepath.Join(homeDir, "Library", "LaunchAgents", macosServiceLabel(cfg, name)+".plist")
 }
