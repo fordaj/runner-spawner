@@ -663,8 +663,15 @@ func controlOne(cfg *Config, p platform, name, verb string, stdout, stderr io.Wr
 	if verb == "start" {
 		want = "running"
 	}
-	if st := queryServiceState(cfg, p, dir, name); st == want {
+	st := queryServiceState(cfg, p, dir, name)
+	if st == want {
 		logf(fmt.Sprintf("runner %s already %s", displayName(name), want))
+		return nil
+	}
+	// Stopping an uninstalled service is a safe no-op: there is
+	// nothing running to stop.
+	if verb == "stop" && st == "not-installed" {
+		logf(fmt.Sprintf("runner %s: service not installed; nothing to stop", displayName(name)))
 		return nil
 	}
 	if cfg.DryRun {

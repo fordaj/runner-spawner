@@ -385,8 +385,8 @@ func validRegistryEntry(m InstallationMeta) (InstallationMeta, string, bool) {
 	if err != nil {
 		return InstallationMeta{}, fmt.Sprintf("registry entry %q skipped: %v", dir, err), false
 	}
-	if !strings.EqualFold(marker.Name, m.Name) || !pathEqual(marker.RepoDir, m.RepoDir) {
-		return InstallationMeta{}, fmt.Sprintf("registry entry %q skipped: marker does not match registry (name %q vs %q)", dir, marker.Name, m.Name), false
+	if !strings.EqualFold(marker.Name, m.Name) || !pathEqual(marker.RepoDir, m.RepoDir) || !repoFullNamesEqual(marker.RepoFullName, m.RepoFullName) {
+		return InstallationMeta{}, fmt.Sprintf("registry entry %q skipped: marker does not match registry (name %q vs %q, repo %q vs %q)", dir, marker.Name, m.Name, marker.RepoFullName, m.RepoFullName), false
 	}
 	return marker, "", true
 }
