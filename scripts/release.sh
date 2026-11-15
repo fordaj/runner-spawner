@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# release.bash — release for runner-spawner.
+# scripts/release.sh — release for runner-spawner.
 #
 # Uses the bundled versioner to compute the next tag, cross-compiles the
 # release binaries for injection (ldflags toolVersion=$TAG), packs each
@@ -10,8 +10,8 @@
 # tools/runner-spawner/update.bash.
 #
 # Usage:
-#   ./release.bash           # tag + push + GitHub release
-#   ./release.bash --dry-run # compute + build only, touch nothing remote
+#   scripts/release.sh           # tag + push + GitHub release
+#   scripts/release.sh --dry-run # compute + build only, touch nothing remote
 #
 # Prerequisites: go, git, tar, zip, bundled versioner
 # (tools/versioner/update.bash), and (for the real release) gh
@@ -26,7 +26,7 @@ DRY_RUN=0
 
 usage() {
     cat <<'EOF'
-Usage: ./release.bash [--dry-run]
+Usage: scripts/release.sh [--dry-run]
 
 Compute the next version with the bundled versioner (see
 tools/versioner/update.bash), cross-compile the release binaries
@@ -57,16 +57,16 @@ while [[ $# -gt 0 ]]; do
         exit 0
         ;;
     *)
-        echo "release.bash: unknown argument: $1" >&2
+        echo "release.sh: unknown argument: $1" >&2
         usage >&2
         exit 2
         ;;
     esac
 done
 
-log() { printf 'release.bash: %s\n' "$*"; }
+log() { printf 'release.sh: %s\n' "$*"; }
 die() {
-    printf 'release.bash: error: %s\n' "$*" >&2
+    printf 'release.sh: error: %s\n' "$*" >&2
     exit 1
 }
 need_cmd() {
@@ -101,7 +101,7 @@ fi
 if [[ -n "$(git status --porcelain)" ]]; then
     if [[ "$DRY_RUN" -eq 1 ]]; then
         log "warning: working tree is not clean (allowed in --dry-run)"
-        git status --short | sed 's/^/release.bash:   /' >&2
+        git status --short | sed 's/^/release.sh:   /' >&2
     else
         die "working tree is not clean (commit or stash first):"$'\n'"$(git status --short)"
     fi
@@ -163,7 +163,7 @@ fi
 log "computing version with versioner..."
 VERSION_OUT="$("$DOGFOOD_BIN" --repo-dir "$REPO_ROOT")"
 log "versioner output:"
-printf '%s\n' "$VERSION_OUT" | sed 's/^/release.bash:   /'
+printf '%s\n' "$VERSION_OUT" | sed 's/^/release.sh:   /'
 
 VERSION="$(printf '%s\n' "$VERSION_OUT" | sed -n 's/^VERSION=//p' | tail -1)"
 TAG="$(printf '%s\n' "$VERSION_OUT" | sed -n 's/^TAG=//p' | tail -1)"
@@ -271,8 +271,8 @@ for d in "${arch_dirs[@]}"; do
     [[ -s "$archive" ]] || die "failed to create $archive"
     log "  $archive:"
     case "$extension" in
-    zip) unzip -l "$archive" | sed 's/^/release.bash:     /' ;;
-    *) tar -tzf "$archive" | sed 's/^/release.bash:     /' ;;
+    zip) unzip -l "$archive" | sed 's/^/release.sh:     /' ;;
+    *) tar -tzf "$archive" | sed 's/^/release.sh:     /' ;;
     esac
     archives+=("$archive")
 done
@@ -286,7 +286,7 @@ elif command -v sha256sum >/dev/null 2>&1; then
 else
     die "neither shasum nor sha256sum found (need one for checksums)"
 fi
-cat dist/checksums.txt | sed 's/^/release.bash:   /'
+cat dist/checksums.txt | sed 's/^/release.sh:   /'
 
 # --- Tag + GitHub release ----------------------------------------------
 if [[ "$DRY_RUN" -eq 1 ]]; then

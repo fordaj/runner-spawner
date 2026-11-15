@@ -7,7 +7,7 @@
       "-i",
       "4",
       "format.bash",
-      "release.bash",
+      "scripts/release.sh",
       "ci/format_check.bash",
       "scripts/entry.sh",
       "scripts/version.bash"

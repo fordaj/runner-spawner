@@ -102,7 +102,6 @@ func TestRun_FlagErrorNotDuplicated(t *testing.T) {
 	}
 }
 
-
 // chdir switches the process working directory for the duration of the test.
 // Package tests are sequential; t.Chdir is unavailable in go 1.23.
 func chdir(t *testing.T, dir string) {

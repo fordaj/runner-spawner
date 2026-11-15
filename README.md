@@ -211,7 +211,7 @@ use (LaunchAgent load prompts).
 
 ```bash
 make build|test|vet|cross   # `cross` emits dist/<goos>-<goarch>/
-./release.bash --dry-run    # compute next tag + build, touch nothing remote
+./scripts/release.sh --dry-run    # compute next tag + build, touch nothing remote
 ./format.bash               # format: prettier + goimports + shfmt
 ./ci/format_check.bash      # check formatting without modifying (CI)
 ```
@@ -241,7 +241,7 @@ configured by `.prettierrc`. Prerequisites (`uv`, Go with
 /            # Go module (typical Go layout; `package main` at root)
   go.mod, main.go, config.go, git.go, platform.go, archive.go,
   token.go, runner.go, verbs.go, script.go, *_test.go
-  Makefile  release.bash  .runner-spawner.json  .versioner.json
+  Makefile  scripts/release.sh  .runner-spawner.json  .versioner.json
   format.bash  ci/format_check.bash  pyproject.toml  uv.lock
   .formattington.json  .prettierrc  .python-version  LICENSE
   scripts/  env.sh + .common.env + .<platform>.env (cascade + log())
@@ -254,7 +254,7 @@ configured by `.prettierrc`. Prerequisites (`uv`, Go with
 ```
 
 - `make build|test|vet|cross`. `cross` emits `dist/<goos>-<goarch>/`.
-- `release.bash` computes the next tag with the bundled `versioner`,
+- `scripts/release.sh` computes the next tag with the bundled `versioner`,
   cross-compiles with `ldflags toolVersion=$TAG`, packs
   `RunnerSpawner_<tag>_<arch>.tar.gz` (`.zip` on Windows; + checksums), tags, and publishes
   the GitHub release. `--dry-run` touches nothing remote.
