@@ -86,8 +86,7 @@ else
     SEVENZIP=""
     for cand in \
         "/c/Program Files/7-Zip/7z.exe" \
-        "/c/Program Files (x86)/7-Zip/7z.exe" \
-    ; do
+        "/c/Program Files (x86)/7-Zip/7z.exe"; do
         [[ -x "$cand" ]] && SEVENZIP="$cand" && break
     done
     if [[ -z "$SEVENZIP" ]]; then
@@ -217,7 +216,8 @@ CROSS_TARGETS=(
 mkdir -p dist
 for target in "${CROSS_TARGETS[@]}"; do
     set -- $target
-    goos="$1"; goarch="$2"
+    goos="$1"
+    goarch="$2"
     arch="$goos-$goarch"
     bin="runner-spawner"
     if [[ "$goos" == "windows" ]]; then bin="runner-spawner.exe"; fi
