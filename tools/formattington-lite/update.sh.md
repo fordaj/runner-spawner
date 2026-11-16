@@ -20,7 +20,7 @@ flowchart TD
 
 ## Bundled platforms
 
-`v0.0.2.0.53/macos-arm64`, `macos-x86_64`, `linux-arm64`, `linux-x86_64`, `windows-arm64`, `windows-x86_64`.
+`v0.0.3.0.67/macos-arm64`, `macos-x86_64`, `linux-arm64`, `linux-x86_64`, `windows-arm64`, `windows-x86_64`.
 
 ## `update.sh` in detail
 

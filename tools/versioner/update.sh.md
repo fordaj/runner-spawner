@@ -22,7 +22,7 @@ The pinned binary selection goes through the [env cascade](../../scripts/env.sh.
 
 ## Bundled platforms
 
-`v0.0.3.0.5/macos-arm64`, `macos-x86_64`, `linux-arm64`, `linux-x86_64`, `windows-x86_64`. There is **no windows-arm64 bundle upstream** — the windows-arm64 platform file pins `VERSIONER_BIN` at the `windows-x86_64` binary and records this in a comment; set `VERSIONER_BIN` to a versioner on PATH if you need something else there.
+`v0.0.3.0.17/macos-arm64`, `macos-x86_64`, `linux-arm64`, `linux-x86_64`, `windows-x86_64`. There is **no windows-arm64 bundle upstream** — the windows-arm64 platform file pins `VERSIONER_BIN` at the `windows-x86_64` binary and records this in a comment; set `VERSIONER_BIN` to a versioner on PATH if you need something else there.
 
 ## `update.sh` in detail
 
