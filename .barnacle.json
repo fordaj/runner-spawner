@@ -1,0 +1,4 @@
+{
+  "title": "runner-spawner",
+  "exclude": ["tools", "dist"]
+}

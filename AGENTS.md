@@ -1,5 +1,18 @@
 # AGENTS.md
 
+```mermaid
+flowchart LR
+    Read[Read README.md<br/>the user contract] --> Change[Change the code]
+    Change --> Sibling[Update the sibling .md<br/>in the same change]
+    Sibling --> Regen[scripts/docs.sh<br/>regenerate ./site]
+    Regen --> Review[Self-review<br/>the changed pages]
+    Review --> Checks[make vet + go test<br/>+ ci/format_check.sh]
+    Checks --> Commit[Commit source + doc<br/>together]
+    click Read href "README.md"
+    click Sibling href "main.go.md"
+    click Regen href "scripts/docs.sh.md"
+```
+
 Guidance for AI coding agents working in this repository. The user-facing contract is in [README.md](README.md) — read it first; this file covers how to work on the code and its documentation.
 
 ## Project Overview
@@ -9,6 +22,7 @@ runner-spawner is a Go CLI (`package main` at the repository root) for installin
 ## Core Principles
 
 - **Converge from any partial state.** Every mutating verb is designed to be re-run after an interruption; state is detected from disk (runner dir, `.runner`, `.runner-spawner.version`) plus a service probe — never from a journal file.
+- **Mermaid-forward documentation.** Every page opens with a Mermaid diagram right under its `#` heading — the reader gets the map before the territory. See [Documentation files (barnacle)](#documentation-files-barnacle).
 - **Never invent platform behavior.** Windows service state is read from the numeric `STATE` code (locale-independent); macOS uses `svc.sh` plus the LaunchAgent plist's existence. Linux is not supported at runtime.
 - **Never print secrets.** Registration tokens flow via `--token` > `RUNNER_SPAWNER_TOKEN` > `GH_TOKEN`/`GITHUB_TOKEN` > `gh api`; they are never logged, never written to config, absent from `--format json`.
 - **The machine registry is a pointer, not truth.** `--scope repo`/`pc` manage only installations whose dir exists and whose `.runner-spawner-install.json` marker parses and matches; anything else is reported, never managed.
@@ -56,26 +70,28 @@ Not committed: `.runners/` (machine-local runner state), `.venv/`, `dist/`, `sit
 
 ## Documentation files (barnacle)
 
-The repository's documentation is a set of Markdown (`.md`) and Mermaid (`.mmd`) source files rendered into a static site by the pinned [barnacle](https://github.com/fordaj/barnacle) binary (`tools/barnacle/`, wired into the environment cascade as `BARNACLE_BIN`). Generate the site with `scripts/docs.sh`; the output (`./site/`) is git-ignored and never committed.
+The repository's documentation is a set of Markdown (`.md`) and Mermaid (`.mmd`) source files rendered into a static site by the pinned [barnacle](https://github.com/fordaj/barnacle) binary (`tools/barnacle/`, wired into the environment cascade as `BARNACLE_BIN`). Generate the site with `scripts/docs.sh`; the output (`./site/`) is git-ignored and never committed. A committed `.barnacle.json` sets the site `title` to `runner-spawner` and excludes `tools` and `dist`.
 
-Layout — documentation lives next to the code it describes:
+Layout — documentation lives next to the code it describes. **Documentation files retain the documented file's suffix**: a page documenting `main.go` is `main.go.md`; a page documenting `scripts/docs.sh` is `scripts/docs.sh.md`. Hub pages named `README.md` and free-standing diagrams keep plain names.
 
-- One sibling `.md` per non-test Go source file at the repository root (`main.go` → [main.md](main.md), `verbs.go` → [verbs.md](verbs.md), …). **One page covers a platform split**: [lock.md](lock.md) documents `lock.go`, `lock_unix.go` and `lock_windows.go` together rather than three near-identical pages.
-- One sibling `.md` per script in `scripts/` (`scripts/entry.sh` → `entry.md`, `scripts/env.sh` → `env.md`, `scripts/release.sh` → `release.md`, `scripts/version.sh` → `version.md`, `scripts/docs.sh` → `docs.md`), plus [scripts/README.md](scripts/README.md) as the hub.
-- One `update.md` per bundle in `tools/` (`tools/<name>/update.md`), plus [tools/README.md](tools/README.md) as the hub.
+- One sibling `.md` per non-test Go source file at the repository root (`main.go` → [main.go.md](main.go.md), `verbs.go` → [verbs.go.md](verbs.go.md), …). **One page covers a platform split**: [lock.go.md](lock.go.md) documents `lock.go`, `lock_unix.go` and `lock_windows.go` together rather than three near-identical pages.
+- One sibling `.md` per script in `scripts/` (`scripts/entry.sh` → [entry.sh.md](scripts/entry.sh.md), `scripts/env.sh` → [env.sh.md](scripts/env.sh.md), `scripts/release.sh` → [release.sh.md](scripts/release.sh.md), `scripts/version.sh` → [version.sh.md](scripts/version.sh.md), `scripts/docs.sh` → [docs.sh.md](scripts/docs.sh.md), `scripts/format.sh` → [format.sh.md](scripts/format.sh.md)), plus [scripts/README.md](scripts/README.md) as the hub.
+- One `update.sh.md` per bundle in `tools/` (`tools/<name>/update.sh.md`), plus `tools/README.md` as the hub. `tools/` is excluded from the generated site via `.barnacle.json` (the pinned binaries carry their own upstream docs), so these pages exist for the repository, not the site; rendered pages must not hyperlink into `tools/` — refer to those pages as code (for example `tools/barnacle/update.sh.md`), because they are not in the site.
 - Test files (`*_test.go`) are deliberately not documented.
 
 Rules for keeping these files current:
 
 - When you add, rename, remove, or repurpose a documented file — a Go file, a script, or a bundle — update its sibling `.md` **in the same change**. A new file without its page is incomplete work; a stale page is worse than none.
+- **Every page opens with a Mermaid diagram** under its `#` heading (guidance, not a hard rule): what the thing is and how it fits, in the diagram type that fits best — flowchart, state diagram, class diagram, sequence diagram, dependency graph. If a page you touch has no diagram at the top, add one.
+- **Diagram nodes and edges link between pages.** In flowcharts, `click Node href "target.md"` makes the node navigable; barnacle rewrites `.md`/`.markdown`/`.mmd` targets to `.html`, relative to the page (exactly like Markdown links). For transitions, an inline anchor in the label works too — `Idle --> Waiting : <a href="target.md">send(cmd)</a>` in state diagrams (labels may not contain `:`), `A -->|<a href="target.md">label</a>| B` in flowcharts, with the edge label double-quoted and single-quoted hrefs inside when it contains parentheses (`A -->|"<a href='target.md'>send(cmd)</a>"| B`). Prefer this in the top-of-page diagram; it makes the site explorable by diagram alone. Barnacle prints a non-fatal note listing pages with no Mermaid diagram — keep it at zero.
 - Source every fact: the `.go`/`.sh` file itself, this file (AGENTS.md), and README.md are the accepted sources. Never invent flags, exit codes, extensions, or bundle-platform matrices.
-- Use plain relative links (`verbs.md`, `../../README.md`) with the linking file's `.md` path — barnacle rewrites them to `.html`. Do not link to files barnacle does not render (binaries, `.sh`, `.json`, `LICENSE`); link the related `.md` page (for external references, a full `https://` URL is fine).
+- Use plain relative links (`verbs.go.md`, `../../README.md`) with the linking file's `.md` path — barnacle rewrites them to `.html`. Do not link to files barnacle does not render (binaries, `.sh`, `.json`, `LICENSE`); link the related `.md` page (for external references, a full `https://` URL is fine).
 - A `foo.md` and a `foo.mmd` may not coexist for the same stem — barnacle fails the whole site rather than overwriting.
 - Hub pages (`scripts/README.md`, `tools/README.md`) list their siblings; adding a page means linking it from the hub too.
-- Barnacle skips hidden files by default, so the `.common.env` and `.<platform>.env` cascade is documented inside [scripts/env.md](scripts/env.md) — keep it accurate there instead of adding hidden doc files.
+- Barnacle skips hidden files by default, so the `.common.env` and `.<platform>.env` cascade is documented inside [scripts/env.sh.md](scripts/env.sh.md) — keep it accurate there instead of adding hidden doc files.
 - Regenerate and self-review the site before publishing: `scripts/docs.sh`, then click through the changed pages. The generator output must remain free of broken local links.
 
-Definition of Done addition: a change that touches any documented file updates (or creates) its sibling page in the same commit.
+Definition of Done addition: a change that touches any documented file updates (or creates) its sibling page in the same commit — including the diagram at the top.
 
 ## Definition of Done
 
