@@ -75,28 +75,29 @@ func (fx *lifecycleFixture) plistPath() string {
 	return fx.fake.plistPath
 }
 
-func (fx *lifecycleFixture) create() error {
+// captureVerb runs one verb against fresh buffers, dumps the captured
+// output under -test.v, and returns it.
+func captureVerb(verb string, fn func(stdout, stderr io.Writer) error) (string, string, error) {
 	var stdout, stderr strings.Builder
-	err := createOne(fx.cfg, fx.plat, fx.name, &stdout, &stderr)
+	err := fn(&stdout, &stderr)
 	if testing.Verbose() {
-		fmt.Fprintf(os.Stderr, "create stdout:\n%s\ncreate stderr:\n%s\n", stdout.String(), stderr.String())
+		fmt.Fprintf(os.Stderr, "%s stdout:\n%s\n%s stderr:\n%s\n", verb, stdout.String(), verb, stderr.String())
 	}
+	return stdout.String(), stderr.String(), err
+}
+
+func (fx *lifecycleFixture) create() error {
+	_, _, err := captureVerb("create", func(so, se io.Writer) error { return createOne(fx.cfg, fx.plat, fx.name, so, se) })
 	return err
 }
 
 func (fx *lifecycleFixture) remove() error {
-	var stdout, stderr strings.Builder
-	err := removeOne(fx.cfg, fx.plat, fx.name, &stdout, &stderr)
-	if testing.Verbose() {
-		fmt.Fprintf(os.Stderr, "remove stdout:\n%s\nremove stderr:\n%s\n", stdout.String(), stderr.String())
-	}
+	_, _, err := captureVerb("remove", func(so, se io.Writer) error { return removeOne(fx.cfg, fx.plat, fx.name, so, se) })
 	return err
 }
 
 func (fx *lifecycleFixture) removeCapture() (string, string, error) {
-	var stdout, stderr strings.Builder
-	err := removeOne(fx.cfg, fx.plat, fx.name, &stdout, &stderr)
-	return stdout.String(), stderr.String(), err
+	return captureVerb("remove", func(so, se io.Writer) error { return removeOne(fx.cfg, fx.plat, fx.name, so, se) })
 }
 
 // writeCachedRunnerArchive materializes a minimal actions/runner archive

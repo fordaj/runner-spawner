@@ -39,7 +39,7 @@ func runnerToken(cfg *Config) (string, error) {
 		}
 		return "", fmt.Errorf("registration token request failed for %s/%s: %w (run `gh auth login` or pass --token)", cfg.Owner, cfg.Repo, err)
 	}
-	tok := strings.TrimSpace(string(out))
+	tok := strings.TrimSpace(out)
 	// gh -q .token prints the bare token; some versions print JSON.
 	if strings.HasPrefix(tok, `"`) {
 		var s string

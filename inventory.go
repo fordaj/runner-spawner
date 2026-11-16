@@ -138,6 +138,16 @@ func ghRunners(endpoint string) ([]ghRunner, error) {
 	return parseRunnerNDJSON(out, endpoint)
 }
 
+// repoInventory queries one repository's runners.
+func repoInventory(ownerRepo string) ([]InventoryRunner, error) {
+	return runnersInventory("repo", fmt.Sprintf("repos/%s/actions/runners?per_page=100", ownerRepo), ownerRepo, "")
+}
+
+// orgInventory queries one organization's runners.
+func orgInventory(org string) ([]InventoryRunner, error) {
+	return runnersInventory("org", fmt.Sprintf("orgs/%s/actions/runners?per_page=100", org), "", org)
+}
+
 // parseRunnerNDJSON decodes newline-delimited runner objects. gh emits
 // NDJSON when --paginate processes multiple pages, but the same parser
 // also tolerates a pretty-printed JSON array from a single page.
@@ -187,28 +197,16 @@ func ghRepoFullNames(endpoint string) ([]string, error) {
 	return names, nil
 }
 
-// repoInventory queries one repository's runners.
-func repoInventory(ownerRepo string) ([]InventoryRunner, error) {
-	rs, err := ghRunners(fmt.Sprintf("repos/%s/actions/runners?per_page=100", ownerRepo))
+// runnersInventory queries one runners endpoint and tags each result with
+// the scope and its owner (repository for "repo", organization for "org").
+func runnersInventory(scope, endpoint, repository, org string) ([]InventoryRunner, error) {
+	rs, err := ghRunners(endpoint)
 	if err != nil {
 		return nil, err
 	}
 	out := make([]InventoryRunner, 0, len(rs))
 	for _, r := range rs {
-		out = append(out, r.toInventory("repo", ownerRepo, ""))
-	}
-	return out, nil
-}
-
-// orgInventory queries one organization's runners.
-func orgInventory(org string) ([]InventoryRunner, error) {
-	rs, err := ghRunners(fmt.Sprintf("orgs/%s/actions/runners?per_page=100", org))
-	if err != nil {
-		return nil, err
-	}
-	out := make([]InventoryRunner, 0, len(rs))
-	for _, r := range rs {
-		out = append(out, r.toInventory("org", "", org))
+		out = append(out, r.toInventory(scope, repository, org))
 	}
 	return out, nil
 }
@@ -330,20 +328,15 @@ func sortRunnerInventory(rs []InventoryRunner) {
 // account for scope=owner.
 func collectInventory(scope, target string) inventoryResult {
 	switch scope {
-	case "repo":
-		res := inventoryResult{Scope: "repo", Target: target}
-		runners, err := repoInventory(target)
-		if err != nil {
-			res.Failures = append(res.Failures, InventoryFailure{Scope: "repo", Target: target, Error: err.Error()})
-			return finishInventory(res)
+	case "repo", "org":
+		query := repoInventory
+		if scope == "org" {
+			query = orgInventory
 		}
-		res.Runners = runners
-		return finishInventory(res)
-	case "org":
-		res := inventoryResult{Scope: "org", Target: target}
-		runners, err := orgInventory(target)
+		res := inventoryResult{Scope: scope, Target: target}
+		runners, err := query(target)
 		if err != nil {
-			res.Failures = append(res.Failures, InventoryFailure{Scope: "org", Target: target, Error: err.Error()})
+			res.Failures = append(res.Failures, InventoryFailure{Scope: scope, Target: target, Error: err.Error()})
 			return finishInventory(res)
 		}
 		res.Runners = runners
@@ -373,9 +366,7 @@ func writeInventory(w io.Writer, format string, res inventoryResult) error {
 			"runners":  runners,
 			"failures": failures,
 		}
-		enc := json.NewEncoder(w)
-		enc.SetIndent("", "  ")
-		return enc.Encode(out)
+		return writeJSONIndent(w, out)
 	}
 	for _, r := range res.Runners {
 		busy := "idle"
@@ -436,10 +427,8 @@ func runInventory(cfg *Config, scope, orgFlag string, stdout, stderr io.Writer) 
 	}
 
 	// gh must be present and working; it carries the auth for us.
-	if out, err := ghAPI("--version"); err != nil {
+	if _, err := ghAPI("--version"); err != nil {
 		return fmt.Errorf("GitHub CLI `gh` is not available: %w — install https://cli.github.com and authenticate (`gh auth login` or set GH_TOKEN/GITHUB_TOKEN)", err)
-	} else {
-		_ = out
 	}
 
 	res := collectInventory(scope, target)

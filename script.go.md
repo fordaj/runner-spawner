@@ -2,7 +2,7 @@
 
 ```mermaid
 flowchart TD
-    Verbs[verbs.go.md · token.go.md · runner.go.md] --> Helpers[runScript · runScriptCapture<br/>runCmd · runCmdCapture]
+    Verbs[verbs.go.md · token.go.md · runner.go.md] --> Helpers[runScriptInDir · runScriptCaptureInDir<br/>runCmd · runCmdCapture]
     Helpers --> Seam{commandExecution<br/>package var}
     Seam -->|production| Real[realExecutor<br/>os/exec]
     Seam -->|tests| Fake[fake_exec_test.go<br/>records invocations,<br/>scripts gh api + service state]
@@ -22,8 +22,8 @@ flowchart TD
 
 ## Call-site helpers
 
-- `runScript(script, args...)` / `runScriptInDir(script, args, dir)` — run `config.sh`/`config.cmd`, `svc.sh`. Runner scripts must be invoked with `dir` == the runner root.
-- `runScriptCapture(script, args...)` / `runScriptCaptureInDir(...)` — same, with combined output (e.g. `svc.sh status`).
+- `runScriptInDir(script, args, dir)` — run `config.sh`/`config.cmd`, `svc.sh`. Runner scripts must be invoked with `dir` == the runner root.
+- `runScriptCaptureInDir(script, args, dir)` — same, with combined output (e.g. `svc.sh status`).
 
 ## Test posture
 

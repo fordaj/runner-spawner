@@ -24,9 +24,9 @@ flowchart TD
 
 ## `update.sh` in detail
 
-Refreshes from `fordaj/formattington` releases. Assets are the platform archives whose stem ends in `-lite` (a `-lite` suffix filter drops everything else, e.g. `-full` bundles): `.tar.gz` on macOS/Linux, `.zip` on Windows, legacy `.7z` accepted. Checksums are verified when the release ships `checksums.txt`/`SHA256SUMS.txt` (warning, not fatal, when absent). Only the `formattington[.exe]` binary is kept, plus `NOTICE.md` and `LICENSES/` when the extracted archive carries them.
+Refreshes from `fordaj/formattington` releases via the shared implementation in [../update.sh.md](../update.sh.md). Bundle-specific behaviour: only the platform archives whose stem ends in `-lite` are kept (a `-lite` suffix filter drops everything else, e.g. `-full` bundles). Checksums are verified when the release ships `checksums.txt`/`SHA256SUMS.txt` (warning, not fatal, when absent). Only the `formattington[.exe]` binary is kept, plus `NOTICE.md` and `LICENSES/` when the extracted archive carries them. Smoke-tests the host binary (`formattington --version`).
 
-Stages into a temporary directory inside the bundle, swaps the version directory in atomically, deletes superseded `v*/` folders only after the new one is staged, and smoke-tests the host binary (`formattington --version`). Environment overrides: `FORMATTINGTON_REPO`, `FORMATTINGTON_TAG`. `--dry-run` lists planned assets without touching anything.
+Environment overrides: `FORMATTINGTON_REPO`, `FORMATTINGTON_TAG`. `--dry-run` lists planned assets without touching anything.
 
 ## Related pages
 

@@ -73,22 +73,18 @@ func serviceScript(dir string, p platform) string {
 	return filepath.Join(dir, p.ServiceBin)
 }
 
-// windowsServiceName matches actions runner + sc.exe usage:
-// actions.runner.<owner>-<repo>.<display>
-func windowsServiceName(cfg *Config, name string) string {
-	return fmt.Sprintf("actions.runner.%s-%s.%s", cfg.Owner, cfg.Repo, displayName(name))
-}
-
-// macosServiceLabel is the launchd label / plist basename the runner uses
-// on macOS: actions.runner.<owner>-<repo>.<display>
-func macosServiceLabel(cfg *Config, name string) string {
+// serviceName is the registration name for the runner's service: the
+// Actions runner uses actions.runner.<owner>-<repo>.<display> as both the
+// sc.exe service name (Windows) and the launchd label / plist basename
+// (macOS).
+func serviceName(cfg *Config, name string) string {
 	return fmt.Sprintf("actions.runner.%s-%s.%s", cfg.Owner, cfg.Repo, displayName(name))
 }
 
 // macosServicePlist returns the user-level LaunchAgent plist path for the
 // runner's service on macOS.
 func macosServicePlist(homeDir string, cfg *Config, name string) string {
-	return filepath.Join(homeDir, "Library", "LaunchAgents", macosServiceLabel(cfg, name)+".plist")
+	return filepath.Join(homeDir, "Library", "LaunchAgents", serviceName(cfg, name)+".plist")
 }
 
 // userHomeDir is a seam so tests can redirect LaunchAgent lookups into a

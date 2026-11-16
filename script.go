@@ -44,26 +44,13 @@ type exitCoder interface {
 	ExitCode() int
 }
 
-// runScript executes a shell script (config.sh, svc.sh) or a batch file
-// (config.cmd) inheriting stdio so the Actions runner output streams.
-func runScript(script string, args ...string) error {
-	return commandExecution.Run(script, args, "")
-}
-
-// runScriptInDir executes a script with the given working directory.
-// dir == "" inherits the caller's cwd (kept for backward compatibility);
-// runner scripts must always be invoked with dir == the runner root.
+// runScriptInDir executes a shell script (config.sh, svc.sh) or a batch file
+// (config.cmd) with dir as working directory.
 func runScriptInDir(script string, args []string, dir string) error {
 	return commandExecution.Run(script, args, dir)
 }
 
-// runScriptCapture executes a script from dir and returns combined output.
-func runScriptCapture(script string, args ...string) (string, error) {
-	return commandExecution.Output(script, args, "")
-}
-
-// runScriptCaptureInDir executes a script with dir as working directory
-// and returns combined output.
+// runScriptCaptureInDir executes a script from dir and returns combined output.
 func runScriptCaptureInDir(script string, args []string, dir string) (string, error) {
 	return commandExecution.Output(script, args, dir)
 }

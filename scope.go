@@ -147,10 +147,10 @@ func printWarnings(warnings []string, stderr io.Writer) {
 func runBatch(verb string, cfg *Config, scope string, targets []mutationTarget, filterProvided bool, directoryScope bool, dispatch func(t mutationTarget, stdout, stderr io.Writer) error, stdout, stderr io.Writer) error {
 	if len(targets) == 0 {
 		if directoryScope {
-			return configErrf("no runner names given (pass --name or add runnerNames to %s)", DefaultConfigFile)
+			return usageErrf("no runner names given (pass --name or add runnerNames to %s)", DefaultConfigFile)
 		}
 		if filterProvided {
-			return configErrf("no runner-spawner-managed installations matching --name found in scope %s", scope)
+			return usageErrf("no runner-spawner-managed installations matching --name found in scope %s", scope)
 		}
 		if cfg.Format == "json" {
 			return writeMutationJSON(stdout, cfg, scope, nil)

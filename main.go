@@ -75,10 +75,6 @@ func isReported(err error) bool {
 	return errors.As(err, &re)
 }
 
-func configErrf(format string, args ...any) error {
-	return &codedError{code: 2, msg: fmt.Sprintf(format, args...)}
-}
-
 func usageErrf(format string, args ...any) error {
 	return &codedError{code: 2, msg: fmt.Sprintf(format, args...)}
 }
@@ -95,13 +91,7 @@ func (f nameFlag) String() string {
 }
 
 func (f nameFlag) Set(s string) error {
-	for _, n := range strings.Split(s, ",") {
-		n = strings.TrimSpace(n)
-		if n == "" {
-			continue
-		}
-		*f.names = append(*f.names, n)
-	}
+	*f.names = append(*f.names, ParseList(s)...)
 	return nil
 }
 
@@ -266,10 +256,10 @@ func runVerb(verb string, args []string, stdout, stderr io.Writer) error {
 	}
 	if configFile != "" {
 		if err := cfg.LoadFile(configFile); err != nil {
-			return configErrf("%v", err)
+			return usageErrf("%v", err)
 		}
 	} else if explicitConfig != "" {
-		return configErrf("config file %q not found", explicitConfig)
+		return usageErrf("config file %q not found", explicitConfig)
 	}
 
 	// Git remote fills owner/repo only while still unknown (lowest source).
@@ -286,7 +276,7 @@ func runVerb(verb string, args []string, stdout, stderr io.Writer) error {
 
 	// Env layer.
 	if err := cfg.ApplyEnv(nil); err != nil {
-		return configErrf("%v", err)
+		return usageErrf("%v", err)
 	}
 
 	// Flag layer (explicit only; unset flags must not clobber env/file).
@@ -349,7 +339,7 @@ func runVerb(verb string, args []string, stdout, stderr io.Writer) error {
 	switch cfg.Format {
 	case "text", "json":
 	default:
-		return configErrf("invalid --format %q (want text or json)", cfg.Format)
+		return usageErrf("invalid --format %q (want text or json)", cfg.Format)
 	}
 
 	p := currentPlatform()
@@ -359,8 +349,8 @@ func runVerb(verb string, args []string, stdout, stderr io.Writer) error {
 	}
 
 	needRepo := verb == "create" || verb == "remove"
-	if err := cfg.Validate(needRepo, names); err != nil {
-		return configErrf("%v", err)
+	if err := cfg.Validate(needRepo); err != nil {
+		return usageErrf("%v", err)
 	}
 
 	if ghScope != "" {
@@ -378,13 +368,9 @@ func runVerb(verb string, args []string, stdout, stderr io.Writer) error {
 			if len(all) == 0 {
 				return fmt.Errorf("no runners found (pass --name, add runnerNames to %s, or check --runners-dir)", DefaultConfigFile)
 			}
-			var out []runnerStatus
-			for _, n := range all {
-				st, err := statusOne(cfg, p, n)
-				if err != nil {
-					return err
-				}
-				out = append(out, st)
+			out, err := statusForTargets(p, simpleTargets(cfg, all, ""))
+			if err != nil {
+				return err
 			}
 			return writeStatus(stdout, cfg, "directory", out)
 		}
@@ -393,35 +379,22 @@ func runVerb(verb string, args []string, stdout, stderr io.Writer) error {
 		if err != nil {
 			return err
 		}
-		var out []runnerStatus
-		for _, t := range targets {
-			st, err := statusOne(t.cfg, p, t.name)
-			if err != nil {
-				return err
-			}
-			st.Repo = t.repo
-			out = append(out, st)
+		out, err := statusForTargets(p, targets)
+		if err != nil {
+			return err
 		}
 		if len(out) == 0 {
-			if cfg.Format == "json" {
-				return writeStatus(stdout, cfg, localScope, nil)
-			}
-			fmt.Fprintf(stderr, "runner-spawner: no runner-spawner-managed installations found in scope %s\n", localScope)
-			return nil
+			return writeEmptyScopeStatus(stdout, stderr, cfg, localScope)
 		}
 		return writeStatus(stdout, cfg, localScope, out)
 	case "status":
 		if localScope == "directory" {
 			if len(names) == 0 {
-				return configErrf("no runner names given (pass --name or add runnerNames to %s)", DefaultConfigFile)
+				return usageErrf("no runner names given (pass --name or add runnerNames to %s)", DefaultConfigFile)
 			}
-			var out []runnerStatus
-			for _, n := range names {
-				st, err := statusOne(cfg, p, n)
-				if err != nil {
-					return err
-				}
-				out = append(out, st)
+			out, err := statusForTargets(p, simpleTargets(cfg, names, ""))
+			if err != nil {
+				return err
 			}
 			return writeStatus(stdout, cfg, "directory", out)
 		}
@@ -432,31 +405,20 @@ func runVerb(verb string, args []string, stdout, stderr io.Writer) error {
 		}
 		if len(targets) == 0 {
 			if len(flagNames) > 0 {
-				return configErrf("no runner-spawner-managed installations named %s found in scope %s", strings.Join(flagNames, ", "), localScope)
+				return usageErrf("no runner-spawner-managed installations named %s found in scope %s", strings.Join(flagNames, ", "), localScope)
 			}
-			if cfg.Format == "json" {
-				return writeStatus(stdout, cfg, localScope, nil)
-			}
-			fmt.Fprintf(stderr, "runner-spawner: no runner-spawner-managed installations found in scope %s\n", localScope)
-			return nil
+			return writeEmptyScopeStatus(stdout, stderr, cfg, localScope)
 		}
-		var out []runnerStatus
-		for _, t := range targets {
-			st, err := statusOne(t.cfg, p, t.name)
-			if err != nil {
-				return err
-			}
-			st.Repo = t.repo
-			out = append(out, st)
+		out, err := statusForTargets(p, targets)
+		if err != nil {
+			return err
 		}
 		return writeStatus(stdout, cfg, localScope, out)
 	default: // create / remove / start / stop
 		directoryScope := localScope == "directory"
 		var targets []mutationTarget
 		if directoryScope {
-			for _, n := range names {
-				targets = append(targets, mutationTarget{cfg: cfg, name: n, repo: repoFull})
-			}
+			targets = simpleTargets(cfg, names, repoFull)
 		} else {
 			var warnings []string
 			var err error
@@ -483,6 +445,41 @@ func runVerb(verb string, args []string, stdout, stderr io.Writer) error {
 	}
 }
 
+// simpleTargets builds directory-scope mutation targets bound to cfg.
+func simpleTargets(cfg *Config, names []string, repo string) []mutationTarget {
+	targets := make([]mutationTarget, 0, len(names))
+	for _, n := range names {
+		targets = append(targets, mutationTarget{cfg: cfg, name: n, repo: repo})
+	}
+	return targets
+}
+
+// statusForTargets inspects every target without mutating anything.
+func statusForTargets(p platform, targets []mutationTarget) ([]runnerStatus, error) {
+	out := make([]runnerStatus, 0, len(targets))
+	for _, t := range targets {
+		st, err := statusOne(t.cfg, p, t.name)
+		if err != nil {
+			return nil, err
+		}
+		if t.repo != "" {
+			st.Repo = t.repo
+		}
+		out = append(out, st)
+	}
+	return out, nil
+}
+
+// writeEmptyScopeStatus reports "no runner-spawner-managed installations in
+// scope": an empty JSON document in json mode, an explanatory note otherwise.
+func writeEmptyScopeStatus(stdout, stderr io.Writer, cfg *Config, scope string) error {
+	if cfg.Format == "json" {
+		return writeStatus(stdout, cfg, scope, nil)
+	}
+	fmt.Fprintf(stderr, "runner-spawner: no runner-spawner-managed installations found in scope %s\n", scope)
+	return nil
+}
+
 // repoFullName renders cfg's owner/repo as "owner/repo", or "" when unknown.
 func repoFullName(cfg *Config) string {
 	if cfg.Owner == "" || cfg.Repo == "" {
@@ -500,6 +497,13 @@ type mutationResult struct {
 	Error string `json:"error,omitempty"`
 }
 
+// writeJSONIndent encodes v as indented JSON with a trailing newline.
+func writeJSONIndent(w io.Writer, v any) error {
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	return enc.Encode(v)
+}
+
 func writeMutationJSON(w io.Writer, cfg *Config, scope string, results []mutationResult) error {
 	if results == nil {
 		results = []mutationResult{}
@@ -515,9 +519,7 @@ func writeMutationJSON(w io.Writer, cfg *Config, scope string, results []mutatio
 	if scope == "directory" {
 		out["repo"] = cfg.Owner + "/" + cfg.Repo
 	}
-	enc := json.NewEncoder(w)
-	enc.SetIndent("", "  ")
-	return enc.Encode(out)
+	return writeJSONIndent(w, out)
 }
 
 func writeStatus(w io.Writer, cfg *Config, scope string, out []runnerStatus) error {
@@ -532,9 +534,7 @@ func writeStatus(w io.Writer, cfg *Config, scope string, out []runnerStatus) err
 		if scope == "directory" {
 			m["repo"] = cfg.Owner + "/" + cfg.Repo
 		}
-		enc := json.NewEncoder(w)
-		enc.SetIndent("", "  ")
-		return enc.Encode(m)
+		return writeJSONIndent(w, m)
 	}
 	for _, st := range out {
 		fmt.Fprintf(w, "%s  %s", st.Name, st.Display)

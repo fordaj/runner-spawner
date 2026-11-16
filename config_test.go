@@ -126,14 +126,14 @@ func TestParseList(t *testing.T) {
 
 func TestValidate(t *testing.T) {
 	cfg := DefaultConfig()
-	if err := cfg.Validate(true, nil); err == nil {
+	if err := cfg.Validate(true); err == nil {
 		t.Fatal("Validate(true) without owner/repo: expected error, got nil")
 	}
 	cfg.Owner, cfg.Repo = "fordaj", "AirFrame"
-	if err := cfg.Validate(true, nil); err != nil {
+	if err := cfg.Validate(true); err != nil {
 		t.Fatalf("Validate(true) with owner/repo: %v", err)
 	}
-	if err := cfg.Validate(false, nil); err != nil {
+	if err := cfg.Validate(false); err != nil {
 		t.Fatalf("Validate(false) without repo should still pass: %v", err)
 	}
 }

@@ -36,11 +36,11 @@ flowchart TD
 
 ## Exit codes
 
-`0` success, `1` runtime error (including inventory/batches with reported failures), `2` bad flags/config (`configErrf`/`usageErrf`). Errors are printed to stderr as `runner-spawner: <err>`; `--quiet` suppresses status logs, never errors.
+`0` success, `1` runtime error (including inventory/batches with reported failures), `2` bad flags/config (`usageErrf`; a `codedError{code: 2}`). Errors are printed to stderr as `runner-spawner: <err>`; `--quiet` suppresses status logs, never errors.
 
 ## Output
 
-`writeStatus` emits the `list`/`status` table (or `{scope, runners[], repo?}` JSON); `writeMutationJSON` emits `{scope, results[], repo?}` for the mutating verbs. In `directory` scope the classic `repo` key is kept for compatibility.
+`writeStatus` emits the `list`/`status` table (or `{scope, runners[], repo?}` JSON); `writeMutationJSON` emits `{scope, results[], repo?}` for the mutating verbs. In `directory` scope the classic `repo` key is kept for compatibility. All JSON output goes through `writeJSONIndent`. The `list`/`status`/`create`/`remove`/`start`/`stop` paths share `simpleTargets` (directory-scope targets bound to one `Config`) and `statusForTargets` (the per-target `statusOne` loop); scoped "no managed installations found" results go through `writeEmptyScopeStatus`.
 
 ## Related pages
 

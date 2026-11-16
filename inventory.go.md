@@ -24,13 +24,13 @@ flowchart TD
 ## How it works
 
 - `ghAPI` runs `gh api` (through the same `commandExecution` seam tests use, so no network in tests); `ghError` classifies failures (rate limit / 401 / 403 / 404) with actionable hints.
-- `ghRunners` queries `repos/{owner}/{repo}/actions/runners` or `orgs/{org}/actions/runners` with `--paginate --jq '.runners[]'`; `parseRunnerNDJSON` decodes one JSON object per line, de-duplicating runners reached via multiple paths.
+- `ghRunners` queries `repos/{owner}/{repo}/actions/runners` or `orgs/{org}/actions/runners` with `--paginate --jq '.runners[]'`; `parseRunnerNDJSON` decodes one JSON object per line, de-duplicating runners reached via multiple paths. `repoInventory`/`orgInventory` are the per-scope entry points, both backed by `runnersInventory`.
 - `owner` aggregate scope has no universal endpoint, so `collectOwnerInventory` enumerates repositories visible to the token (`orgs/{org}/repos?type=all` for organizations, `users/{owner}/repos?type=owner` otherwise — `isOrg` probes `orgs/{owner}`) and queries each repository.
 - Inaccessible targets are **partial failures** (`InventoryFailure`), never aborts: what was gathered is still printed, the command exits `1` with `failures[]` populated. Empty inventory with no failures is a success.
 
 ## Output
 
-`writeInventory` emits the text table (ID, name, scope, repository/org, online/offline, busy/idle, labels, version) or `{scope, target, ok, runners[], failures[]}` JSON.
+`writeInventory` emits the text table (ID, name, scope, repository/org, online/offline, busy/idle, labels, version) or `{scope, target, ok, runners[], failures[]}` JSON (via `writeJSONIndent`).
 
 Key types: `InventoryRunner` (ID, Name, Scope, Repository/Organization, Status, Busy, Labels, Version, OS, Ephemeral), `InventoryFailure` (Scope, Target, Error), `inventoryResult`.
 

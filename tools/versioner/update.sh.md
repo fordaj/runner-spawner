@@ -26,7 +26,7 @@ The pinned binary selection goes through the [env cascade](../../scripts/env.sh.
 
 ## `update.sh` in detail
 
-Refreshes from `fordaj/Versioner` releases: platform archives (stem ends in `<os>-<arch>`; `.tar.gz` on macOS/Linux, `.zip` on Windows, legacy `.7z` accepted), mapped onto the bundle layout (e.g. `darwin-amd64` → `macos-x86_64`), verified against the release's `checksums.txt`/`SHA256SUMS.txt` when present — warning rather than fatal when absent. Only the binary is kept. Stages into a temporary directory inside the bundle, swaps in atomically, prunes superseded `v*/` folders only after the new one is staged, and smoke-tests the host binary (`versioner --version`). Environment overrides: `VERSIONER_REPO`, `VERSIONER_TAG`. `--dry-run` lists planned assets without touching anything.
+Refreshes from `fordaj/Versioner` releases via the shared implementation in [../update.sh.md](../update.sh.md). Bundle-specific behaviour: accepts every platform archive, maps its `<os>-<arch>` suffix onto the bundle layout (e.g. `darwin-amd64` → `macos-x86_64`), verifies against the release's `checksums.txt`/`SHA256SUMS.txt` when present — warning rather than fatal when absent. Only the binary is kept. Smoke-tests the host binary (`versioner --version`). Environment overrides: `VERSIONER_REPO`, `VERSIONER_TAG`. `--dry-run` lists planned assets without touching anything.
 
 ## Related pages
 

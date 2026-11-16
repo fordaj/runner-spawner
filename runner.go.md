@@ -6,8 +6,8 @@ flowchart TD
     Dir --> Extracted{isExtracted<br/>config.sh or config.cmd<br/>plus svc.sh on Unix}
     Extracted --> Configured{isConfigured<br/>.runner exists}
     Configured --> Display[displayName<br/>hostname-name]
-    Display --> SvcUnix[macosServiceLabel<br/>LaunchAgent plist]
-    Display --> SvcWin[windowsServiceName<br/>actions.runner.scope.display]
+    Display --> SvcUnix[serviceName<br/>launchd label / sc.exe service]
+    Display --> SvcWin[serviceName<br/>actions.runner.scope.display]
     Display --> Cmd[runCmd / runCmdCapture<br/>commandExecution seam]
     click Platform href "platform.go.md"
     click Cmd href "script.go.md"
@@ -22,7 +22,7 @@ flowchart TD
 - `runnerExists(dir)` / `isConfigured(dir)` — directory exists; `.runner` file exists (config.sh done).
 - `isExtracted(dir, p)` — `config.sh` (or `config.cmd`) is a regular file, plus `svc.sh` on non-Windows. Anything less means an interrupted extraction to repair.
 - `configScript(dir, p)` / `serviceScript(dir, p)` — absolute paths of the runner's scripts.
-- `windowsServiceName` / `macosServiceLabel` — `actions.runner.<owner>-<repo>.<display>`, matching how the Actions runner registers itself; `macosServicePlist(homeDir, cfg, name)` — the user-level LaunchAgent plist path, using the `userHomeDir` seam so tests can redirect it.
+- `serviceName` — `actions.runner.<owner>-<repo>.<display>`, used as both the sc.exe service name (Windows) and the launchd label / plist basename (macOS), matching how the Actions runner registers itself; `macosServicePlist(homeDir, cfg, name)` — the user-level LaunchAgent plist path, using the `userHomeDir` seam so tests can redirect it.
 - `runCmd` / `runCmdCapture` — thin wrappers over the `commandExecution` seam (see [script.go.md](script.go.md)) for `sc.exe`/`net`-style invocations.
 
 ## Where it is used

@@ -21,6 +21,30 @@ type runnerStatus struct {
 	Repo         string `json:"repo,omitempty"` // owner/repo; set for --scope repo|pc discovery
 }
 
+// newLoggers returns the status and warning loggers for one invocation.
+// Status logs are suppressed by --quiet; warnings always print.
+func newLoggers(cfg *Config, stderr io.Writer) (logf, warnf func(string)) {
+	logf = func(s string) {
+		if !cfg.Quiet {
+			fmt.Fprintln(stderr, "runner-spawner:", s)
+		}
+	}
+	warnf = func(s string) { fmt.Fprintln(stderr, "runner-spawner: warning:", s) }
+	return logf, warnf
+}
+
+// scMissingService reports whether a failed sc.exe call means the service
+// does not (or no longer) exist: exit code 1060/1072, or the raw code in the
+// output for fakes that carry no code. 1060 = service does not exist,
+// 1072 = marked for deletion (already gone enough for our purposes).
+func scMissingService(err error, out string) bool {
+	var ec exitCoder
+	if errors.As(err, &ec) {
+		return ec.ExitCode() == 1060 || ec.ExitCode() == 1072
+	}
+	return strings.Contains(out, "1060") || strings.Contains(out, "1072")
+}
+
 // statusOne inspects one runner dir without mutating anything.
 func statusOne(cfg *Config, p platform, name string) (runnerStatus, error) {
 	st := DetectLifecycle(cfg, p, name)
@@ -48,19 +72,9 @@ func statusOne(cfg *Config, p platform, name string) (runnerStatus, error) {
 // windowsServiceStateFromOutput).
 func queryServiceState(cfg *Config, p platform, dir, name string) string {
 	if p.IsWindows {
-		out, err := runCmdCapture("sc.exe", "query", windowsServiceName(cfg, name))
+		out, err := runCmdCapture("sc.exe", "query", serviceName(cfg, name))
 		if err != nil {
-			var ec exitCoder
-			if errors.As(err, &ec) {
-				// 1060 = service does not exist, 1072 = marked for
-				// deletion (already gone enough for our purposes).
-				if ec.ExitCode() == 1060 || ec.ExitCode() == 1072 {
-					return "not-installed"
-				}
-			}
-			// Fallback for fakes/errors that carry no code: the output
-			// usually echoes the raw Win32 code.
-			if strings.Contains(out, "1060") || strings.Contains(out, "1072") {
+			if scMissingService(err, out) {
 				return "not-installed"
 			}
 			return "unknown"
@@ -90,7 +104,7 @@ func queryServiceState(cfg *Config, p platform, dir, name string) string {
 		// Plist exists but the dir is gone: orphan waiting for cleanup.
 		return "unknown"
 	}
-	out, err := runScriptCaptureInDir(svc, []string{"status"}, dir)
+	out, _ := runScriptCaptureInDir(svc, []string{"status"}, dir)
 	upper := strings.ToUpper(out)
 	switch {
 	case strings.Contains(upper, "STARTED"):
@@ -100,9 +114,6 @@ func queryServiceState(cfg *Config, p platform, dir, name string) string {
 	case strings.Contains(upper, "NOT INSTALLED"):
 		return "not-installed"
 	default:
-		if err != nil {
-			return "unknown"
-		}
 		return "unknown"
 	}
 }
@@ -146,12 +157,7 @@ func listNames(cfg *Config) ([]string, error) {
 var configPreserveFiles = []string{".runner", ".credentials", ".credentials_rsaparams"}
 
 func createOne(cfg *Config, p platform, name string, stdout, stderr io.Writer) error {
-	logf := func(s string) {
-		if !cfg.Quiet {
-			fmt.Fprintln(stderr, "runner-spawner:", s)
-		}
-	}
-	warnf := func(s string) { fmt.Fprintln(stderr, "runner-spawner: warning:", s) }
+	logf, warnf := newLoggers(cfg, stderr)
 	if err := p.requireSupported("create"); err != nil {
 		return err
 	}
@@ -216,14 +222,17 @@ func createOne(cfg *Config, p platform, name string, stdout, stderr io.Writer) e
 	// Windows service account is required for --runasservice.
 	if p.IsWindows {
 		if cfg.WindowsUsername == "" {
-			pwd, err := promptLine(stdinReader(), "Enter Windows service account username (the account the runner service runs as): ")
+			pwd, err := readPromptLine(stdinReader(), "Enter Windows service account username (the account the runner service runs as): ")
 			if err != nil {
 				return fmt.Errorf("--windows-username is required on Windows (set RUNNER_SPAWNER_WINDOWS_USERNAME or pass --windows-username): %w", err)
 			}
 			cfg.WindowsUsername = strings.TrimSpace(pwd)
 		}
 		if cfg.WindowsPassword == "" {
-			pwd, err := promptPassword(stdinReader(), "Enter password for Windows service account: ")
+			pwd, err := readPromptLine(stdinReader(), "Enter password for Windows service account: ")
+			if err == nil {
+				fmt.Fprintln(os.Stderr)
+			}
 			if err != nil {
 				return fmt.Errorf("--windows-password is required on Windows (set RUNNER_SPAWNER_WINDOWS_PASSWORD or pass --windows-password): %w", err)
 			}
@@ -371,7 +380,7 @@ func ensureUnixService(cfg *Config, p platform, dir, name string, logf func(stri
 // ensureWindowsService makes sure the Windows service (installed by
 // config.cmd --runasservice) exists, is started, and reports running.
 func ensureWindowsService(cfg *Config, p platform, dir, name string, logf func(string), warnf func(string)) error {
-	svcName := windowsServiceName(cfg, name)
+	svcName := serviceName(cfg, name)
 	st := queryServiceState(cfg, p, dir, name)
 	switch st {
 	case "not-installed":
@@ -395,12 +404,7 @@ func ensureWindowsService(cfg *Config, p platform, dir, name string, logf func(s
 // ---- remove ----
 
 func removeOne(cfg *Config, p platform, name string, stdout, stderr io.Writer) error {
-	logf := func(s string) {
-		if !cfg.Quiet {
-			fmt.Fprintln(stderr, "runner-spawner:", s)
-		}
-	}
-	warnf := func(s string) { fmt.Fprintln(stderr, "runner-spawner: warning:", s) }
+	logf, warnf := newLoggers(cfg, stderr)
 	if err := p.requireSupported("remove"); err != nil {
 		return err
 	}
@@ -478,12 +482,9 @@ func removeOne(cfg *Config, p platform, name string, stdout, stderr io.Writer) e
 		if err := stopService(cfg, p, dir, name, logf, warnf); err != nil {
 			warnf(fmt.Sprintf("stopping orphaned service: %v (continuing)", err))
 		}
-		out, err := runCmdCapture("sc.exe", "delete", windowsServiceName(cfg, name))
-		if err != nil {
-			var ec exitCoder
-			if !errors.As(err, &ec) || (ec.ExitCode() != 1060 && ec.ExitCode() != 1072) {
-				warnf(fmt.Sprintf("sc.exe delete %s failed: %v: %s (continuing)", windowsServiceName(cfg, name), err, strings.TrimSpace(out)))
-			}
+		out, err := runCmdCapture("sc.exe", "delete", serviceName(cfg, name))
+		if err != nil && !scMissingService(err, out) {
+			warnf(fmt.Sprintf("sc.exe delete %s failed: %v: %s (continuing)", serviceName(cfg, name), err, strings.TrimSpace(out)))
 		}
 	} else if !p.IsWindows && st.ServiceState == "unknown" {
 		// Dir gone but a LaunchAgent plist remains: orphan.
@@ -580,13 +581,10 @@ func deregisterRemote(cfg *Config, p platform, dir, name, tok string, st lifecyc
 // is gone or broken. Best effort: warns and returns on any failure.
 func cleanupOrphanService(cfg *Config, p platform, dir, name string, warnf func(string)) {
 	if p.IsWindows {
-		svcName := windowsServiceName(cfg, name)
+		svcName := serviceName(cfg, name)
 		out, err := runCmdCapture("sc.exe", "delete", svcName)
-		if err != nil {
-			ec, ok := err.(exitCoder)
-			if !ok || (ec.ExitCode() != 1060 && ec.ExitCode() != 1072) {
-				warnf(fmt.Sprintf("sc.exe delete %s failed: %v: %s", svcName, err, strings.TrimSpace(out)))
-			}
+		if err != nil && !scMissingService(err, out) {
+			warnf(fmt.Sprintf("sc.exe delete %s failed: %v: %s", svcName, err, strings.TrimSpace(out)))
 		}
 		return
 	}
@@ -608,9 +606,9 @@ func cleanupOrphanService(cfg *Config, p platform, dir, name string, warnf func(
 
 func manualServiceRemoveHint(cfg *Config, p platform, name string) string {
 	if p.IsWindows {
-		return fmt.Sprintf("sc.exe delete %s", windowsServiceName(cfg, name))
+		return fmt.Sprintf("sc.exe delete %s", serviceName(cfg, name))
 	}
-	return fmt.Sprintf("launchctl remove %s", macosServiceLabel(cfg, name))
+	return fmt.Sprintf("launchctl remove %s", serviceName(cfg, name))
 }
 
 func fileExists(path string) bool {
@@ -629,11 +627,7 @@ func stopOne(cfg *Config, p platform, name string, stdout, stderr io.Writer) err
 }
 
 func controlOne(cfg *Config, p platform, name, verb string, stdout, stderr io.Writer) error {
-	logf := func(s string) {
-		if !cfg.Quiet {
-			fmt.Fprintln(stderr, "runner-spawner:", s)
-		}
-	}
+	logf, _ := newLoggers(cfg, stderr)
 	if err := p.requireSupported(verb); err != nil {
 		return err
 	}
@@ -680,7 +674,7 @@ func controlOne(cfg *Config, p platform, name, verb string, stdout, stderr io.Wr
 	}
 	logf(fmt.Sprintf("%s %s", verb, displayName(name)))
 	if p.IsWindows {
-		if err := runCmd("sc.exe", verb, windowsServiceName(cfg, name)); err != nil {
+		if err := runCmd("sc.exe", verb, serviceName(cfg, name)); err != nil {
 			return fmt.Errorf("runner %s: sc.exe %s: %w", name, verb, err)
 		}
 	} else {
@@ -711,10 +705,8 @@ func stopService(cfg *Config, p platform, dir, name string, logf func(string), w
 	}
 	logf(fmt.Sprintf("stopping %s", displayName(name)))
 	if p.IsWindows {
-		svcName := windowsServiceName(cfg, name)
+		svcName := serviceName(cfg, name)
 		if _, err := runCmdCapture("sc.exe", "stop", svcName); err != nil {
-			out, _ := runCmdCapture("sc.exe", "query", svcName) // best-effort context
-			_ = out
 			warnf(fmt.Sprintf("sc.exe stop failed for %s: %v (waiting for the service to settle)", svcName, err))
 		}
 	} else {
@@ -729,7 +721,7 @@ func stopService(cfg *Config, p platform, dir, name string, logf func(string), w
 	})
 	if !ok {
 		if p.IsWindows {
-			return fmt.Errorf("service %s did not stop within %s — stop it manually (`sc.exe stop %s`) and re-run `runner-spawner remove --name %s`", displayName(name), serviceTimeout, windowsServiceName(cfg, name), name)
+			return fmt.Errorf("service %s did not stop within %s — stop it manually (`sc.exe stop %s`) and re-run `runner-spawner remove --name %s`", displayName(name), serviceTimeout, serviceName(cfg, name), name)
 		}
 		return fmt.Errorf("service %s did not stop within %s — stop it manually (`%s/svc.sh stop`) and re-run `runner-spawner remove --name %s`", displayName(name), serviceTimeout, dir, name)
 	}
@@ -742,13 +734,10 @@ func stopService(cfg *Config, p platform, dir, name string, logf func(string), w
 func uninstallService(cfg *Config, p platform, dir, name string, logf func(string), warnf func(string)) error {
 	logf(fmt.Sprintf("uninstalling %s service", displayName(name)))
 	if p.IsWindows {
-		svcName := windowsServiceName(cfg, name)
+		svcName := serviceName(cfg, name)
 		out, err := runCmdCapture("sc.exe", "delete", svcName)
-		if err != nil {
-			var ec exitCoder
-			if !errors.As(err, &ec) || (ec.ExitCode() != 1060 && ec.ExitCode() != 1072) {
-				warnf(fmt.Sprintf("sc.exe delete failed for %s: %v: %s (continuing)", svcName, err, strings.TrimSpace(out)))
-			}
+		if err != nil && !scMissingService(err, out) {
+			warnf(fmt.Sprintf("sc.exe delete failed for %s: %v: %s (continuing)", svcName, err, strings.TrimSpace(out)))
 		}
 		return nil
 	}
@@ -766,22 +755,14 @@ func uninstallService(cfg *Config, p platform, dir, name string, logf func(strin
 // stdinReader is a seam for interactive prompts (tests can swap it).
 var stdinReader = func() *bufio.Reader { return bufio.NewReader(os.Stdin) }
 
-func promptLine(r *bufio.Reader, label string) (string, error) {
+// readPromptLine prints label and reads one trimmed line of input. Callers
+// prompting for a secret should print a trailing newline themselves
+// (fmt.Fprintln(os.Stderr)) once the read returns.
+func readPromptLine(r *bufio.Reader, label string) (string, error) {
 	fmt.Fprint(os.Stderr, label)
 	line, err := r.ReadString('\n')
 	if err != nil && line == "" {
 		return "", err
 	}
 	return strings.TrimRight(line, "\r\n"), nil
-}
-
-func promptPassword(r *bufio.Reader, label string) (string, error) {
-	fmt.Fprint(os.Stderr, label)
-	line, err := r.ReadString('\n')
-	if err != nil && line == "" {
-		return "", err
-	}
-	pwd := strings.TrimRight(line, "\r\n")
-	fmt.Fprintln(os.Stderr)
-	return pwd, nil
 }

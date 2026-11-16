@@ -114,16 +114,16 @@ func (c *Config) LoadFile(path string) error {
 	c.ConfigPath = path
 
 	var raw struct {
-		RepoDir         *string  `json:"repoDir"`
-		Owner           *string  `json:"owner"`
-		Repo            *string  `json:"repo"`
-		RunnerNames     []string `json:"runnerNames"`
-		RunnersDir      *string  `json:"runnersDir"`
-		RunnerGroup     *string  `json:"runnerGroup"`
-		RunnerVersion   *string  `json:"runnerVersion"`
-		ArchiveCacheDir *string  `json:"archiveCacheDir"`
-		Labels          []string `json:"labels"`
-		WindowsUsername *string  `json:"windowsUsername"`
+		RepoDir         *string   `json:"repoDir"`
+		Owner           *string   `json:"owner"`
+		Repo            *string   `json:"repo"`
+		RunnerNames     *[]string `json:"runnerNames"`
+		RunnersDir      *string   `json:"runnersDir"`
+		RunnerGroup     *string   `json:"runnerGroup"`
+		RunnerVersion   *string   `json:"runnerVersion"`
+		ArchiveCacheDir *string   `json:"archiveCacheDir"`
+		Labels          *[]string `json:"labels"`
+		WindowsUsername *string   `json:"windowsUsername"`
 	}
 	dec := json.NewDecoder(strings.NewReader(string(data)))
 	dec.DisallowUnknownFields()
@@ -133,37 +133,25 @@ func (c *Config) LoadFile(path string) error {
 	if dec.More() {
 		return fmt.Errorf("%s: trailing data after JSON object", path)
 	}
-	if raw.RepoDir != nil {
-		c.RepoDir = *raw.RepoDir
-	}
-	if raw.Owner != nil {
-		c.Owner = *raw.Owner
-	}
-	if raw.Repo != nil {
-		c.Repo = *raw.Repo
-	}
-	if raw.RunnerNames != nil {
-		c.RunnerNames = raw.RunnerNames
-	}
-	if raw.RunnersDir != nil {
-		c.RunnersDir = *raw.RunnersDir
-	}
-	if raw.RunnerGroup != nil {
-		c.RunnerGroup = *raw.RunnerGroup
-	}
-	if raw.RunnerVersion != nil {
-		c.RunnerVersion = *raw.RunnerVersion
-	}
-	if raw.ArchiveCacheDir != nil {
-		c.ArchiveCacheDir = *raw.ArchiveCacheDir
-	}
-	if raw.Labels != nil {
-		c.Labels = raw.Labels
-	}
-	if raw.WindowsUsername != nil {
-		c.WindowsUsername = *raw.WindowsUsername
-	}
+	setIfNotNil(&c.RepoDir, raw.RepoDir)
+	setIfNotNil(&c.Owner, raw.Owner)
+	setIfNotNil(&c.Repo, raw.Repo)
+	setIfNotNil(&c.RunnerNames, raw.RunnerNames)
+	setIfNotNil(&c.RunnersDir, raw.RunnersDir)
+	setIfNotNil(&c.RunnerGroup, raw.RunnerGroup)
+	setIfNotNil(&c.RunnerVersion, raw.RunnerVersion)
+	setIfNotNil(&c.ArchiveCacheDir, raw.ArchiveCacheDir)
+	setIfNotNil(&c.Labels, raw.Labels)
+	setIfNotNil(&c.WindowsUsername, raw.WindowsUsername)
 	return nil
+}
+
+// setIfNotNil overlays *src on dst when src is set. It lets LoadFile keep
+// the config file's optional-per-key semantics as a flat list of overlays.
+func setIfNotNil[T any](dst *T, src *T) {
+	if src != nil {
+		*dst = *src
+	}
 }
 
 // ParseList parses a comma-separated list. Empty string yields an empty
@@ -250,11 +238,10 @@ func (c *Config) ApplyEnv(getenv func(string) string) error {
 	return nil
 }
 
-// Validate checks the merged config. nameArg is the set of names given
-// directly to the subcommand; an empty result with needNames=true is an
-// error. Owner/Repo are required for create/remove but not for
-// start/stop/status/list which only touch local directories.
-func (c *Config) Validate(needRepo bool, nameArg []string) error {
+// Validate checks the merged config. Owner/Repo are required for
+// create/remove but not for start/stop/status/list which only touch local
+// directories.
+func (c *Config) Validate(needRepo bool) error {
 	if c.RepoDir == "" {
 		return fmt.Errorf("repo dir must not be empty")
 	}
@@ -272,7 +259,6 @@ func (c *Config) Validate(needRepo bool, nameArg []string) error {
 			return fmt.Errorf("owner/repo unknown: pass --owner/--repo, set RUNNER_SPAWNER_OWNER/RUNNER_SPAWNER_REPO, add owner/repo to %s, or run inside a git clone with a GitHub origin remote", DefaultConfigFile)
 		}
 	}
-	_ = nameArg
 	return nil
 }
 
