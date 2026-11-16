@@ -32,13 +32,12 @@ func DetectLifecycle(cfg *Config, p platform, name string) lifecycleState {
 	} else {
 		st.DirGone = true
 	}
-	switch {
-	case !p.Supported:
-		st.ServiceState = "unsupported"
-	default:
+	if p.Supported {
 		// sc.exe can see a service whose dir is gone; the darwin probe
 		// falls back to the LaunchAgent plist check in the same way.
 		st.ServiceState = queryServiceState(cfg, p, dir, name)
+	} else {
+		st.ServiceState = "unsupported"
 	}
 	return st
 }
@@ -90,6 +89,10 @@ func waitFor(timeout, interval time.Duration, fn func() bool) bool {
 	}
 }
 
+// windowsStateRe finds the numeric STATE code in `sc.exe query` output.
+// Codes: 1 STOPPED, 2 START_PENDING, 3 STOP_PENDING, 4 RUNNING,
+// 5 CONTINUE_PENDING, 6 PAUSE_PENDING, 7 PAUSED (the English words are
+// localized on non-English Windows, so only the number is trustworthy).
 var windowsStateRe = regexp.MustCompile(`:\s*([1-7])\b`)
 
 // windowsServiceStateFromOutput parses `sc.exe query` output using the

@@ -26,6 +26,21 @@ import (
 //	owner       aggregate inventory across every repository of an account or
 //	            organization the token can see (--owner, default: config/git)
 
+// splitOwnerRepo splits "owner/repo" into trimmed owner and repo. ok is
+// false unless both parts are non-empty and repo carries no second slash.
+func splitOwnerRepo(s string) (owner, repo string, ok bool) {
+	idx := strings.Index(s, "/")
+	if idx < 0 {
+		return "", "", false
+	}
+	owner = strings.TrimSpace(s[:idx])
+	repo = strings.TrimSpace(s[idx+1:])
+	if owner == "" || repo == "" || strings.Contains(repo, "/") {
+		return "", "", false
+	}
+	return owner, repo, true
+}
+
 // resolveScope validates --scope/--org/--github for verb and decides
 // the mode of this invocation. It returns localScope ("directory"|"repo"|"pc",
 // empty in GitHub mode) or githubScope ("repo"|"org"|"owner", empty in local
@@ -38,9 +53,8 @@ func resolveScope(verb, scopeArg, orgArg string, githubFlag bool, cfg *Config) (
 	// --repo owner/repo (contains a slash) is always interpreted as a
 	// GitHub inventory target and implies --scope repo + --github.
 	if verb == "status" && strings.Contains(cfg.Repo, "/") && (sc == "" || sc == "repo" || sc == "directory") {
-		idx := strings.Index(cfg.Repo, "/")
-		o, r := strings.TrimSpace(cfg.Repo[:idx]), strings.TrimSpace(cfg.Repo[idx+1:])
-		if o == "" || r == "" || strings.Contains(r, "/") {
+		o, r, ok := splitOwnerRepo(cfg.Repo)
+		if !ok {
 			return "", "", usageErrf("invalid --repo %q (want owner/repo)", cfg.Repo)
 		}
 		cfg.Owner, cfg.Repo = o, r

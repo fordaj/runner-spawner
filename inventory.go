@@ -234,27 +234,33 @@ func collectOwnerInventory(owner string) inventoryResult {
 		// Not fatal: fall through to the user path, which may still work.
 		res.Failures = append(res.Failures, InventoryFailure{Scope: "org", Target: owner, Error: orgErr.Error()})
 	}
-
 	if org {
-		// Organization: org-level runners first...
-		runners, err := orgInventory(owner)
-		if err != nil {
-			res.Failures = append(res.Failures, InventoryFailure{Scope: "org", Target: owner, Error: err.Error()})
-		} else {
-			res.Runners = append(res.Runners, runners...)
-		}
-		// ...then every repository the org owns (or the token can see).
-		repos, err := ghRepoFullNames(fmt.Sprintf("orgs/%s/repos?per_page=100&type=all", owner))
-		if err != nil {
-			res.Failures = append(res.Failures, InventoryFailure{Scope: "repo", Target: owner + "/*", Error: err.Error()})
-			return finishInventory(res)
-		}
-		res.Runners = append(res.Runners, collectRepoRunners(repos, &res.Failures)...)
+		return collectOrgInventory(res, owner)
+	}
+	return collectUserInventory(res, owner)
+}
+
+// collectOrgInventory aggregates the org-level runners plus every
+// repository the org owns (or the token can see).
+func collectOrgInventory(res inventoryResult, owner string) inventoryResult {
+	runners, err := orgInventory(owner)
+	if err != nil {
+		res.Failures = append(res.Failures, InventoryFailure{Scope: "org", Target: owner, Error: err.Error()})
+	} else {
+		res.Runners = append(res.Runners, runners...)
+	}
+	repos, err := ghRepoFullNames(fmt.Sprintf("orgs/%s/repos?per_page=100&type=all", owner))
+	if err != nil {
+		res.Failures = append(res.Failures, InventoryFailure{Scope: "repo", Target: owner + "/*", Error: err.Error()})
 		return finishInventory(res)
 	}
+	res.Runners = append(res.Runners, collectRepoRunners(repos, &res.Failures)...)
+	return finishInventory(res)
+}
 
-	// User (or an owner we could not classify): no account-level
-	// endpoint exists, so enumerate owned repositories.
+// collectUserInventory aggregates runners across the owned repositories of
+// a user account (no account-level endpoint exists).
+func collectUserInventory(res inventoryResult, owner string) inventoryResult {
 	repos, err := ghRepoFullNames(fmt.Sprintf("users/%s/repos?per_page=100&type=owner", owner))
 	if err != nil {
 		res.Failures = append(res.Failures, InventoryFailure{Scope: "repo", Target: owner + "/*", Error: err.Error()})

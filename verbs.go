@@ -156,6 +156,30 @@ func listNames(cfg *Config) ([]string, error) {
 // dir on re-extract so config state survives a version swap.
 var configPreserveFiles = []string{".runner", ".credentials", ".credentials_rsaparams"}
 
+// ensureWindowsCredentials prompts for the Windows service account when it
+// is missing, so create can configure the runner --runasservice. Returns an
+// error naming the required flags when input cannot be read.
+func ensureWindowsCredentials(cfg *Config) error {
+	if cfg.WindowsUsername == "" {
+		pwd, err := readPromptLine(stdinReader(), "Enter Windows service account username (the account the runner service runs as): ")
+		if err != nil {
+			return fmt.Errorf("--windows-username is required on Windows (set RUNNER_SPAWNER_WINDOWS_USERNAME or pass --windows-username): %w", err)
+		}
+		cfg.WindowsUsername = strings.TrimSpace(pwd)
+	}
+	if cfg.WindowsPassword == "" {
+		pwd, err := readPromptLine(stdinReader(), "Enter password for Windows service account: ")
+		if err == nil {
+			fmt.Fprintln(os.Stderr)
+		}
+		if err != nil {
+			return fmt.Errorf("--windows-password is required on Windows (set RUNNER_SPAWNER_WINDOWS_PASSWORD or pass --windows-password): %w", err)
+		}
+		cfg.WindowsPassword = pwd
+	}
+	return nil
+}
+
 func createOne(cfg *Config, p platform, name string, stdout, stderr io.Writer) error {
 	logf, warnf := newLoggers(cfg, stderr)
 	if err := p.requireSupported("create"); err != nil {
@@ -221,22 +245,8 @@ func createOne(cfg *Config, p platform, name string, stdout, stderr io.Writer) e
 
 	// Windows service account is required for --runasservice.
 	if p.IsWindows {
-		if cfg.WindowsUsername == "" {
-			pwd, err := readPromptLine(stdinReader(), "Enter Windows service account username (the account the runner service runs as): ")
-			if err != nil {
-				return fmt.Errorf("--windows-username is required on Windows (set RUNNER_SPAWNER_WINDOWS_USERNAME or pass --windows-username): %w", err)
-			}
-			cfg.WindowsUsername = strings.TrimSpace(pwd)
-		}
-		if cfg.WindowsPassword == "" {
-			pwd, err := readPromptLine(stdinReader(), "Enter password for Windows service account: ")
-			if err == nil {
-				fmt.Fprintln(os.Stderr)
-			}
-			if err != nil {
-				return fmt.Errorf("--windows-password is required on Windows (set RUNNER_SPAWNER_WINDOWS_PASSWORD or pass --windows-password): %w", err)
-			}
-			cfg.WindowsPassword = pwd
+		if err := ensureWindowsCredentials(cfg); err != nil {
+			return err
 		}
 	}
 
@@ -401,6 +411,64 @@ func ensureWindowsService(cfg *Config, p platform, dir, name string, logf func(s
 	return nil
 }
 
+// removeLocalService stops and uninstalls the runner's local service,
+// falling back to best-effort orphan cleanup when the installation is
+// partial or gone. GitHub-side deregistration is the caller's job.
+func removeLocalService(cfg *Config, p platform, dir, name string, st lifecycleState, logf, warnf func(string)) error {
+	dirOK := runnerExists(dir)
+	svcPresent := p.IsWindows || (dirOK && fileExists(serviceScript(dir, p)))
+	if dirOK && svcPresent {
+		if err := stopService(cfg, p, dir, name, logf, warnf); err != nil {
+			return err
+		}
+		if err := uninstallService(cfg, p, dir, name, logf, warnf); err != nil {
+			return err
+		}
+		return waitForServiceUninstalled(cfg, p, dir, name, warnf)
+	}
+	switch {
+	case dirOK:
+		// Partial/failed extraction on macOS: svc.sh is unusable, but a
+		// LaunchAgent plist may have been created by a half-finished
+		// install.
+		warnf(fmt.Sprintf("runner dir %s is incomplete (no usable svc.sh); cleaning up any lingering service", dir))
+		cleanupOrphanService(cfg, p, dir, name, warnf)
+	case p.IsWindows && st.ServiceState != "not-installed":
+		// Dir gone/partial but sc.exe still sees the service: orphan.
+		warnf(fmt.Sprintf("runner dir %s is missing/incomplete but the Windows service for %s still exists; deleting it", dir, displayName(name)))
+		if err := stopService(cfg, p, dir, name, logf, warnf); err != nil {
+			warnf(fmt.Sprintf("stopping orphaned service: %v (continuing)", err))
+		}
+		out, err := runCmdCapture("sc.exe", "delete", serviceName(cfg, name))
+		if err != nil && !scMissingService(err, out) {
+			warnf(fmt.Sprintf("sc.exe delete %s failed: %v: %s (continuing)", serviceName(cfg, name), err, strings.TrimSpace(out)))
+		}
+	case !p.IsWindows && st.ServiceState == "unknown":
+		// Dir gone but a LaunchAgent plist remains: orphan.
+		warnf(fmt.Sprintf("runner dir %s is missing but a LaunchAgent plist remains; cleaning it up", dir))
+		cleanupOrphanService(cfg, p, dir, name, warnf)
+	}
+	return nil
+}
+
+// waitForServiceUninstalled waits for the service to actually disappear
+// after uninstall. A surviving service triggers a best-effort orphan
+// cleanup; if it still persists, the caller is told to remove it manually.
+func waitForServiceUninstalled(cfg *Config, p platform, dir, name string, warnf func(string)) error {
+	serviceGone := func() bool {
+		return queryServiceState(cfg, p, dir, name) == "not-installed"
+	}
+	if waitFor(serviceTimeout, servicePollInterval, serviceGone) {
+		return nil
+	}
+	warnf(fmt.Sprintf("service for %s is still registered after uninstall; attempting orphan cleanup", displayName(name)))
+	cleanupOrphanService(cfg, p, dir, name, warnf)
+	if waitFor(serviceTimeout, servicePollInterval, serviceGone) {
+		return nil
+	}
+	return fmt.Errorf("service for %s is still installed after uninstall; remove it manually (%s) and re-run `runner-spawner remove --name %s`", displayName(name), manualServiceRemoveHint(cfg, p, name), name)
+}
+
 // ---- remove ----
 
 func removeOne(cfg *Config, p platform, name string, stdout, stderr io.Writer) error {
@@ -441,55 +509,14 @@ func removeOne(cfg *Config, p platform, name string, stdout, stderr io.Writer) e
 	// 1) Stop + uninstall the service first (macOS's config.sh requires
 	// a stopped service since v2.336). Wait for the stop to settle
 	// instead of fire-and-forget.
-	dirOK := runnerExists(dir)
 	if st.DirGone && st.ServiceState == "not-installed" {
 		// Nothing local — but the GitHub registration may still exist
 		// (e.g. a previous `remove` failed deregistration). Don't
 		// early-return: the deregistration below completes the job.
 		logf(fmt.Sprintf("runner %s not installed locally (no %s); checking GitHub for a lingering registration", name, dir))
 	}
-	svcPresent := p.IsWindows || (dirOK && fileExists(serviceScript(dir, p)))
-	if dirOK && svcPresent {
-		if err := stopService(cfg, p, dir, name, logf, warnf); err != nil {
-			return err
-		}
-		if err := uninstallService(cfg, p, dir, name, logf, warnf); err != nil {
-			return err
-		}
-		// Post-condition: the service is actually gone. If the runner
-		// left an orphan (service survived the uninstall), try a
-		// best-effort cleanup and then fail loudly if it persists.
-		if !waitFor(serviceTimeout, servicePollInterval, func() bool {
-			return queryServiceState(cfg, p, dir, name) == "not-installed"
-		}) {
-			warnf(fmt.Sprintf("service for %s is still registered after uninstall; attempting orphan cleanup", displayName(name)))
-			cleanupOrphanService(cfg, p, dir, name, warnf)
-			if !waitFor(serviceTimeout, servicePollInterval, func() bool {
-				return queryServiceState(cfg, p, dir, name) == "not-installed"
-			}) {
-				return fmt.Errorf("service for %s is still installed after uninstall; remove it manually (%s) and re-run `runner-spawner remove --name %s`", displayName(name), manualServiceRemoveHint(cfg, p, name), name)
-			}
-		}
-	} else if dirOK {
-		// Partial/failed extraction on macOS: svc.sh is unusable, but a
-		// LaunchAgent plist may have been created by a half-finished
-		// install.
-		warnf(fmt.Sprintf("runner dir %s is incomplete (no usable svc.sh); cleaning up any lingering service", dir))
-		cleanupOrphanService(cfg, p, dir, name, warnf)
-	} else if p.IsWindows && st.ServiceState != "not-installed" {
-		// Dir gone/partial but sc.exe still sees the service: orphan.
-		warnf(fmt.Sprintf("runner dir %s is missing/incomplete but the Windows service for %s still exists; deleting it", dir, displayName(name)))
-		if err := stopService(cfg, p, dir, name, logf, warnf); err != nil {
-			warnf(fmt.Sprintf("stopping orphaned service: %v (continuing)", err))
-		}
-		out, err := runCmdCapture("sc.exe", "delete", serviceName(cfg, name))
-		if err != nil && !scMissingService(err, out) {
-			warnf(fmt.Sprintf("sc.exe delete %s failed: %v: %s (continuing)", serviceName(cfg, name), err, strings.TrimSpace(out)))
-		}
-	} else if !p.IsWindows && st.ServiceState == "unknown" {
-		// Dir gone but a LaunchAgent plist remains: orphan.
-		warnf(fmt.Sprintf("runner dir %s is missing but a LaunchAgent plist remains; cleaning it up", dir))
-		cleanupOrphanService(cfg, p, dir, name, warnf)
+	if err := removeLocalService(cfg, p, dir, name, st, logf, warnf); err != nil {
+		return err
 	}
 
 	// 2) Remote deregistration. Never fetch the token before we know we

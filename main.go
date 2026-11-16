@@ -126,64 +126,71 @@ func runInner(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	}
 }
 
+// usageText is the static help printed by `--help` and on unknown subcommands.
+var usageText = []string{
+	"runner-spawner - install and manage repository-scoped self-hosted runners",
+	"",
+	"Usage: runner-spawner <subcommand> [flags]",
+	"",
+	"Subcommands:",
+	"  create   Install (configure + service) one or more runners",
+	"  remove   Stop, uninstall, deregister, and delete runners",
+	"  start    Start runner service(s)",
+	"  stop     Stop runner service(s)",
+	"  status   Show per-runner service state",
+	"  list     List runners (config names + on-disk dirs)",
+	"  init     Write a .runner-spawner.json for this repository",
+	"",
+	"Scopes (--scope; list, status, start, stop):",
+	"  directory  (default) only the runners in the configured --runners-dir",
+	"  repo       all runners of the current repository, incl. other working directories",
+	"  pc         all runner-spawner-managed installations on this machine",
+	"  org        (status only, read-only) GitHub runners registered to an organization",
+	"  owner      (status only, read-only) GitHub runners across repos of an account/org",
+	"GitHub inventory via `status --scope repo|org|owner` is always read-only.",
+	"Examples: runner-spawner list --scope pc",
+	"          runner-spawner status --scope org --org fordaj",
+	"",
+	"Global flags (accepted by every subcommand):",
+	"  --config PATH        path to .runner-spawner.json (auto-discovered by default)",
+	"  --repo-dir DIR       target repository directory (default: .)",
+	"  --owner OWNER        GitHub owner (default: .runner-spawner.json / git remote)",
+	"  --repo REPO          GitHub repository (default: .runner-spawner.json / git remote)",
+	"  --name NAME          runner name (repeatable/comma-separated; default: config names)",
+	"  --scope SCOPE        list,status,start,stop: directory|repo|pc (default: directory);",
+	"                       status also: org|owner (GitHub inventory, read-only)",
+	"  --org ORG            GitHub organization (status --scope org)",
+	"  --github             status: force GitHub inventory mode (status --scope repo)",
+	"  --runners-dir DIR    runners root (default: .runners under --repo-dir)",
+	"  --runner-group NAME  runner group (default: Default)",
+	"  --runner-version V   actions/runner version (default: 2.338.2)",
+	"  --archive-cache-dir DIR  archive cache (default: <runners-dir>/cache)",
+	"  --labels A,B,...     runner labels (default: auto from platform+hostname)",
+	"  --token TOKEN        registration token (default: RUNNER_SPAWNER_TOKEN / GH_TOKEN / gh)",
+	"  --dry-run            print what would happen, change nothing",
+	"  --local-only         remove: skip GitHub deregistration (local cleanup only)",
+	"  --format text|json   output format (default: text)",
+	"  --quiet              suppress status logs on stderr",
+	"",
+	"Windows only: --windows-username USER --windows-password PASS",
+	"  (prefer RUNNER_SPAWNER_WINDOWS_USERNAME / RUNNER_SPAWNER_WINDOWS_PASSWORD)",
+	"",
+	"Environment: RUNNER_SPAWNER_CONFIG, RUNNER_SPAWNER_REPO_DIR,",
+	"  RUNNER_SPAWNER_OWNER, RUNNER_SPAWNER_REPO, RUNNER_SPAWNER_RUNNER_NAMES,",
+	"  RUNNER_SPAWNER_RUNNERS_DIR, RUNNER_SPAWNER_RUNNER_GROUP,",
+	"  RUNNER_SPAWNER_RUNNER_VERSION, RUNNER_SPAWNER_ARCHIVE_CACHE_DIR,",
+	"  RUNNER_SPAWNER_LABELS, RUNNER_SPAWNER_WINDOWS_USERNAME,",
+	"  RUNNER_SPAWNER_WINDOWS_PASSWORD, RUNNER_SPAWNER_TOKEN,",
+	"  RUNNER_SPAWNER_DRY_RUN, RUNNER_SPAWNER_FORMAT, RUNNER_SPAWNER_QUIET.",
+	"",
+	"Supported platforms: macOS and Windows. Linux is not yet supported.",
+	"See README.md for .runner-spawner.json (or run `runner-spawner init`).",
+}
+
 func printUsage(w io.Writer) {
-	fmt.Fprintln(w, "runner-spawner - install and manage repository-scoped self-hosted runners")
-	fmt.Fprintln(w, "")
-	fmt.Fprintln(w, "Usage: runner-spawner <subcommand> [flags]")
-	fmt.Fprintln(w, "")
-	fmt.Fprintln(w, "Subcommands:")
-	fmt.Fprintln(w, "  create   Install (configure + service) one or more runners")
-	fmt.Fprintln(w, "  remove   Stop, uninstall, deregister, and delete runners")
-	fmt.Fprintln(w, "  start    Start runner service(s)")
-	fmt.Fprintln(w, "  stop     Stop runner service(s)")
-	fmt.Fprintln(w, "  status   Show per-runner service state")
-	fmt.Fprintln(w, "  list     List runners (config names + on-disk dirs)")
-	fmt.Fprintln(w, "  init     Write a .runner-spawner.json for this repository")
-	fmt.Fprintln(w, "")
-	fmt.Fprintln(w, "Scopes (--scope; list, status, start, stop):")
-	fmt.Fprintln(w, "  directory  (default) only the runners in the configured --runners-dir")
-	fmt.Fprintln(w, "  repo       all runners of the current repository, incl. other working directories")
-	fmt.Fprintln(w, "  pc         all runner-spawner-managed installations on this machine")
-	fmt.Fprintln(w, "  org        (status only, read-only) GitHub runners registered to an organization")
-	fmt.Fprintln(w, "  owner      (status only, read-only) GitHub runners across repos of an account/org")
-	fmt.Fprintln(w, "GitHub inventory via `status --scope repo|org|owner` is always read-only.")
-	fmt.Fprintln(w, "Examples: runner-spawner list --scope pc")
-	fmt.Fprintln(w, "          runner-spawner status --scope org --org fordaj")
-	fmt.Fprintln(w, "")
-	fmt.Fprintln(w, "Global flags (accepted by every subcommand):")
-	fmt.Fprintln(w, "  --config PATH        path to .runner-spawner.json (auto-discovered by default)")
-	fmt.Fprintln(w, "  --repo-dir DIR       target repository directory (default: .)")
-	fmt.Fprintln(w, "  --owner OWNER        GitHub owner (default: .runner-spawner.json / git remote)")
-	fmt.Fprintln(w, "  --repo REPO          GitHub repository (default: .runner-spawner.json / git remote)")
-	fmt.Fprintln(w, "  --name NAME          runner name (repeatable/comma-separated; default: config names)")
-	fmt.Fprintln(w, "  --scope SCOPE        list,status,start,stop: directory|repo|pc (default: directory);")
-	fmt.Fprintln(w, "                       status also: org|owner (GitHub inventory, read-only)")
-	fmt.Fprintln(w, "  --org ORG            GitHub organization (status --scope org)")
-	fmt.Fprintln(w, "  --github             status: force GitHub inventory mode (status --scope repo)")
-	fmt.Fprintln(w, "  --runners-dir DIR    runners root (default: .runners under --repo-dir)")
-	fmt.Fprintln(w, "  --runner-group NAME  runner group (default: Default)")
-	fmt.Fprintln(w, "  --runner-version V   actions/runner version (default: 2.338.2)")
-	fmt.Fprintln(w, "  --archive-cache-dir DIR  archive cache (default: <runners-dir>/cache)")
-	fmt.Fprintln(w, "  --labels A,B,...     runner labels (default: auto from platform+hostname)")
-	fmt.Fprintln(w, "  --token TOKEN        registration token (default: RUNNER_SPAWNER_TOKEN / GH_TOKEN / gh)")
-	fmt.Fprintln(w, "  --dry-run            print what would happen, change nothing")
-	fmt.Fprintln(w, "  --local-only         remove: skip GitHub deregistration (local cleanup only)")
-	fmt.Fprintln(w, "  --format text|json   output format (default: text)")
-	fmt.Fprintln(w, "  --quiet              suppress status logs on stderr")
-	fmt.Fprintln(w, "")
-	fmt.Fprintln(w, "Windows only: --windows-username USER --windows-password PASS")
-	fmt.Fprintln(w, "  (prefer RUNNER_SPAWNER_WINDOWS_USERNAME / RUNNER_SPAWNER_WINDOWS_PASSWORD)")
-	fmt.Fprintln(w, "")
-	fmt.Fprintln(w, "Environment: RUNNER_SPAWNER_CONFIG, RUNNER_SPAWNER_REPO_DIR,")
-	fmt.Fprintln(w, "  RUNNER_SPAWNER_OWNER, RUNNER_SPAWNER_REPO, RUNNER_SPAWNER_RUNNER_NAMES,")
-	fmt.Fprintln(w, "  RUNNER_SPAWNER_RUNNERS_DIR, RUNNER_SPAWNER_RUNNER_GROUP,")
-	fmt.Fprintln(w, "  RUNNER_SPAWNER_RUNNER_VERSION, RUNNER_SPAWNER_ARCHIVE_CACHE_DIR,")
-	fmt.Fprintln(w, "  RUNNER_SPAWNER_LABELS, RUNNER_SPAWNER_WINDOWS_USERNAME,")
-	fmt.Fprintln(w, "  RUNNER_SPAWNER_WINDOWS_PASSWORD, RUNNER_SPAWNER_TOKEN,")
-	fmt.Fprintln(w, "  RUNNER_SPAWNER_DRY_RUN, RUNNER_SPAWNER_FORMAT, RUNNER_SPAWNER_QUIET.")
-	fmt.Fprintln(w, "")
-	fmt.Fprintln(w, "Supported platforms: macOS and Windows. Linux is not yet supported.")
-	fmt.Fprintln(w, "See README.md for .runner-spawner.json (or run `runner-spawner init`).")
+	for _, line := range usageText {
+		fmt.Fprintln(w, line)
+	}
 }
 
 func runVerb(verb string, args []string, stdout, stderr io.Writer) error {

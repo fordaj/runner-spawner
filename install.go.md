@@ -27,7 +27,7 @@ A machine-wide index, `<user-config-dir>/runner-spawner/installations.json` (e.g
 
 `validRegistryEntry` keeps an entry only when the dir exists and its marker parses, matches the registry (name, installation dir, repo), and was written by runner-spawner (`Tool == "runner-spawner"`, `Version == 1`). Stale or unverifiable entries are reported as warnings and **never** managed. Installations under the configured root are always in scope and need no marker.
 
-`discoverInstallations` selects registry matches for `repo` (repository or `repoDir` match — `repoMatches`/`repoFullNamesEqual`/`pathEqual`) or all valid entries for `pc`, unions them with the configured root, sorts deterministically (`sortDiscovered`), applies the `--name` filter (`filterByNames`), and builds per-target configs (`scopedConfig`). Pre-marker installations are adopted via `synthesizedMeta` when found through the configured root.
+`discoverInstallations` selects registry matches for `repo` (repository or `repoDir` match — `repoMatches`/`repoFullNamesEqual`/`pathEqual`) or all valid entries for `pc`, unions them with the configured root (`rootInstallations`), sorts deterministically (`sortDiscovered`), applies the `--name` filter (`filterByNames`), and builds per-target configs (`scopedConfig`). Pre-marker installations are adopted via `synthesizedMeta` when found through the configured root.
 
 `create` writes the marker and registry entry (failure warns, does not fail — see [verbs.go.md](verbs.go.md)); `remove` unregisters the installation.
 

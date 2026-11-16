@@ -32,6 +32,10 @@ bundle you want — never this file directly.
 - `--repo REPO` — repository slug (default: the bundle's documented slug).
 - `--help` / `-h` — usage.
 
+## Structure
+
+The script is a linear pipeline built from named stages, each one independently understandable: argument parsing → tag resolution → `print_dry_run` (when `--dry-run`) or `download → verify_checksums → install_archive (per archive) → swap in v<tag>/ → prune old folders → report_host_binary`. Platform-name mapping is centralized in `parse_stem_to_platform` (asset stems → `<os>-<arch>` bundle names) and `host_platform` (this machine).
+
 ## What the shared implementation does
 
 1. Resolves the tag (latest release, or `--tag`), validating its shape.

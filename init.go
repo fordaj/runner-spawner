@@ -21,6 +21,26 @@ type initFile struct {
 	RunnerVersion string   `json:"runnerVersion"`
 }
 
+// confirmOverwrite reports whether an existing .runner-spawner.json may be
+// overwritten. A non-terminal caller refuses with exit code 2; in a terminal
+// the user is asked "Overwrite? [y/N]" and confirmed only on an explicit yes.
+// ok is false when the user declines (nothing to do).
+func confirmOverwrite(stdin io.Reader, target string, stdout, stderr io.Writer) (ok bool, err error) {
+	if !stdinIsTerminal(stdin) {
+		fmt.Fprintf(stderr, "runner-spawner: %s already exists; not overwriting\n", target)
+		return false, &codedError{code: 2, msg: "config file exists"}
+	}
+	fmt.Fprintf(stderr, "%s already exists. Overwrite? [y/N] ", target)
+	reader := bufio.NewReader(stdin)
+	answer, _ := reader.ReadString('\n')
+	answer = strings.TrimSpace(strings.ToLower(answer))
+	if answer != "y" && answer != "yes" {
+		fmt.Fprintln(stdout, "keeping existing file; nothing written")
+		return false, nil
+	}
+	return true, nil
+}
+
 // runInit implements `runner-spawner init`, modeled on `formattington init`:
 // it examines the git remote of the current directory and writes a tailored
 // ./.runner-spawner.json. A committed .runner-spawner.json already present
@@ -52,16 +72,11 @@ func runInit(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 
 	// Overwrite guard.
 	if _, err := os.Stat(target); err == nil {
-		if !stdinIsTerminal(stdin) {
-			fmt.Fprintf(stderr, "runner-spawner: %s already exists; not overwriting\n", target)
-			return &codedError{code: 2, msg: "config file exists"}
+		overwrite, err := confirmOverwrite(stdin, target, stdout, stderr)
+		if err != nil {
+			return err
 		}
-		fmt.Fprintf(stderr, "%s already exists. Overwrite? [y/N] ", target)
-		reader := bufio.NewReader(stdin)
-		answer, _ := reader.ReadString('\n')
-		answer = strings.TrimSpace(strings.ToLower(answer))
-		if answer != "y" && answer != "yes" {
-			fmt.Fprintln(stdout, "keeping existing file; nothing written")
+		if !overwrite {
 			return nil
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {

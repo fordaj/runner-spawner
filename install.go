@@ -384,6 +384,35 @@ func validRegistryEntry(m InstallationMeta) (InstallationMeta, string, bool) {
 	return marker, "", true
 }
 
+// rootInstallations enumerates installations under the configured runners
+// root — always in scope. Entries without a readable marker are adopted via
+// synthesizedMeta: they are managed because they live under this tool's
+// configured root, not because they carry proof of identity.
+func rootInstallations(cfg *Config, p platform) []InstallationMeta {
+	meta := []InstallationMeta{}
+	root, err := cfg.RunnersRoot()
+	if err != nil {
+		return meta
+	}
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return meta
+	}
+	for _, e := range entries {
+		// The cache and locks subdirs are not runners.
+		if !e.IsDir() || e.Name() == "cache" || e.Name() == ".locks" {
+			continue
+		}
+		dir := filepath.Join(root, e.Name())
+		if marker, err := readInstallMarker(dir); err == nil {
+			meta = append(meta, marker)
+			continue
+		}
+		meta = append(meta, synthesizedMeta(cfg, p, dir))
+	}
+	return meta
+}
+
 // discoverInstallations enumerates installations for a scope. The
 // returned warnings describe skipped registry entries (stale or
 // unverified); they are printed but never cause management of the
@@ -410,21 +439,8 @@ func discoverInstallations(cfg *Config, p platform, scope string) ([]discoveredR
 	}
 
 	// 1) The configured runners root — always in scope.
-	if root, err := cfg.RunnersRoot(); err == nil {
-		if entries, rerr := os.ReadDir(root); rerr == nil {
-			for _, e := range entries {
-				// The cache and locks subdirs are not runners.
-				if !e.IsDir() || e.Name() == "cache" || e.Name() == ".locks" {
-					continue
-				}
-				dir := filepath.Join(root, e.Name())
-				if marker, err := readInstallMarker(dir); err == nil {
-					add(marker, "root")
-					continue
-				}
-				add(synthesizedMeta(cfg, p, dir), "root")
-			}
-		}
+	for _, m := range rootInstallations(cfg, p) {
+		add(m, "root")
 	}
 
 	if scope == "directory" {
