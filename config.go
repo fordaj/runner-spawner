@@ -185,55 +185,48 @@ func (c *Config) ApplyEnv(getenv func(string) string) error {
 	if getenv == nil {
 		getenv = os.Getenv
 	}
-	if v := getenv(EnvRepoDir); v != "" {
-		c.RepoDir = v
-	}
-	if v := getenv(EnvOwner); v != "" {
-		c.Owner = v
-	}
-	if v := getenv(EnvRepo); v != "" {
-		c.Repo = v
+	// Straight string-overlay variables, grouped.
+	for _, overlay := range []struct {
+		env string
+		dst *string
+	}{
+		{EnvRepoDir, &c.RepoDir},
+		{EnvOwner, &c.Owner},
+		{EnvRepo, &c.Repo},
+		{EnvRunnersDir, &c.RunnersDir},
+		{EnvRunnerGroup, &c.RunnerGroup},
+		{EnvRunnerVersion, &c.RunnerVersion},
+		{EnvArchiveCacheDir, &c.ArchiveCacheDir},
+		{EnvWindowsUsername, &c.WindowsUsername},
+		{EnvWindowsPassword, &c.WindowsPassword},
+		{EnvFormat, &c.Format},
+	} {
+		if v := getenv(overlay.env); v != "" {
+			*overlay.dst = v
+		}
 	}
 	if v := getenv(EnvRunnerNames); v != "" {
 		c.RunnerNames = ParseList(v)
 	}
-	if v := getenv(EnvRunnersDir); v != "" {
-		c.RunnersDir = v
-	}
-	if v := getenv(EnvRunnerGroup); v != "" {
-		c.RunnerGroup = v
-	}
-	if v := getenv(EnvRunnerVersion); v != "" {
-		c.RunnerVersion = v
-	}
-	if v := getenv(EnvArchiveCacheDir); v != "" {
-		c.ArchiveCacheDir = v
-	}
 	if v := getenv(EnvLabels); v != "" {
 		c.Labels = ParseList(v)
 	}
-	if v := getenv(EnvWindowsUsername); v != "" {
-		c.WindowsUsername = v
-	}
-	if v := getenv(EnvWindowsPassword); v != "" {
-		c.WindowsPassword = v
-	}
-	if v := getenv(EnvDryRun); v != "" {
+	for _, flag := range []struct {
+		env string
+		dst *bool
+	}{
+		{EnvDryRun, &c.DryRun},
+		{EnvQuiet, &c.Quiet},
+	} {
+		v := getenv(flag.env)
+		if v == "" {
+			continue
+		}
 		b, err := ParseBool(v)
 		if err != nil {
-			return fmt.Errorf("%s: invalid boolean %q", EnvDryRun, v)
+			return fmt.Errorf("%s: invalid boolean %q", flag.env, v)
 		}
-		c.DryRun = b
-	}
-	if v := getenv(EnvFormat); v != "" {
-		c.Format = v
-	}
-	if v := getenv(EnvQuiet); v != "" {
-		b, err := ParseBool(v)
-		if err != nil {
-			return fmt.Errorf("%s: invalid boolean %q", EnvQuiet, v)
-		}
-		c.Quiet = b
+		*flag.dst = b
 	}
 	return nil
 }

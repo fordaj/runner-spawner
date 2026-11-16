@@ -21,6 +21,7 @@ flowchart TD
 ## Behavior
 
 - `runInit` parses only `--help`/`-h` and `--dir DIR` (default `.`); anything else is a usage error (exit `2`).
+- `confirmOverwrite(stdin, target, stdout, stderr)` owns the overwrite guard: refuses with exit `2` on a non-terminal stdin, prompts `Overwrite? [y/N]` in a terminal.
 - It examines the target directory's `origin` remote via `detectGitRemoteOwnerRepo` (see [git.go.md](git.go.md)) and writes `<dir>/.runner-spawner.json` (`initFile`: owner, repo, `runnerNames: ["runner01"]`, `runnersDir: .runners`, `runnerGroup: Default`, `runnerVersion: 2.338.2`).
 - **Never overwrites non-interactively**: if the file exists and stdin is not a terminal, it exits with code `2`; in a terminal it prompts `Overwrite? [y/N]` and proceeds only on an explicit yes.
 - The file contains no secrets; the committed `.runner-spawner.json` at the repo root is this tool's own dogfooding.

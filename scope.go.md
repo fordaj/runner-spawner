@@ -27,7 +27,7 @@ flowchart TD
 - `repo`/`org`/`owner` for `status` — read-only GitHub inventory (see [inventory.go.md](inventory.go.md)); `org`/`owner` are rejected for other verbs, as are `--org`/`--github`. `create`/`remove` accept only `directory`.
 - `--repo owner/repo` (contains a slash) implies GitHub inventory mode for `status`; `--github` forces it.
 
-`resolveScope` validates per verb and returns `(localScope, githubScope, err)`; `discoveredTargets` maps a non-directory scope to per-runner `mutationTarget`s via `discoverInstallations`; `printWarnings` reports skipped/stale registry entries on stderr.
+`resolveScope` validates per verb and returns `(localScope, githubScope, err)`; the `--repo owner/repo` shorthand is split by `splitOwnerRepo` (trimmed, both parts non-empty, no second slash); `discoveredTargets` maps a non-directory scope to per-runner `mutationTarget`s via `discoverInstallations`; `printWarnings` reports skipped/stale registry entries on stderr.
 
 ## Batch semantics
 

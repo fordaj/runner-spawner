@@ -133,28 +133,21 @@ need_cmd() {
     command -v "$1" >/dev/null 2>&1 || die "required command not found: $1"
 }
 
-need_cmd gh
-need_cmd tar
-
-TOOL_ROOT="$SCRIPT_DIR/$UPDATE_TOOL"
-[[ -d "$TOOL_ROOT" ]] || die "$UPDATE_TOOL bundle directory not found: $TOOL_ROOT"
-log INFO "$UPDATE_TOOL bundle directory: $TOOL_ROOT"
-log INFO "repository: $REPO"
-
-if [[ -z "$TAG" ]]; then
-    TAG="$(gh release view --repo "$REPO" --json tagName -q .tagName)" ||
-        die "could not determine latest release from $REPO (is gh authenticated and the repo visible?)"
-fi
-[[ -n "$TAG" ]] || die "could not determine release tag from $REPO"
-if ! [[ "$TAG" =~ ^v[0-9]+(\.[0-9]+)+$ ]]; then
-    die "invalid tag '$TAG' (expected vX.Y.Z...)"
-fi
-log INFO "release tag: $TAG"
-
 # keep_asset <stem> reports whether the archive stem belongs to this bundle
 # (formattington-lite, for example, only accepts -lite assets).
 keep_asset() {
     [[ "$UPDATE_ASSET_SUFFIX" == "" || "$1" == *"$UPDATE_ASSET_SUFFIX" ]]
+}
+
+# strip_archive_ext drops the archive extension (.tar.gz/.zip/.7z) from a name.
+strip_archive_ext() {
+    local name="$1"
+    case "$name" in
+    *.tar.gz) printf '%s' "${name%.tar.gz}" ;;
+    *.zip) printf '%s' "${name%.zip}" ;;
+    *.7z) printf '%s' "${name%.7z}" ;;
+    *) printf '%s' "$name" ;;
+    esac
 }
 
 # parse_stem_to_platform <stem> sets PLATFORM (e.g.
@@ -180,23 +173,35 @@ parse_stem_to_platform() {
     return 1
 }
 
-strip_archive_ext() {
-    local name="$1"
-    case "$name" in
-    *.tar.gz) printf '%s' "${name%.tar.gz}" ;;
-    *.zip) printf '%s' "${name%.zip}" ;;
-    *.7z) printf '%s' "${name%.7z}" ;;
-    *) printf '%s' "$name" ;;
+# host_platform echoes this machine's bundle-platform name (e.g. macos-arm64).
+host_platform() {
+    local os_raw arch_raw host_os host_arch
+    os_raw="$(uname -s | tr '[:upper:]' '[:lower:]')"
+    arch_raw="$(uname -m | tr '[:upper:]' '[:lower:]')"
+    case "$os_raw" in
+    darwin*) host_os="macos" ;;
+    linux*) host_os="linux" ;;
+    msys* | mingw* | cygwin* | windows* | win*) host_os="windows" ;;
+    *) host_os="$os_raw" ;;
     esac
+    case "$arch_raw" in
+    x86_64 | amd64) host_arch="x86_64" ;;
+    arm64 | aarch64) host_arch="arm64" ;;
+    *) host_arch="$arch_raw" ;;
+    esac
+    printf '%s-%s' "$host_os" "$host_arch"
 }
 
-if [[ "$DRY_RUN" -eq 1 ]]; then
+# print_dry_run lists the tag's assets and the old version folders that
+# would be removed, without changing anything.
+print_dry_run() {
     log INFO "DRY RUN: no download, extraction, or deletion will happen"
     log INFO "release $TAG assets:"
+    local assets_list
     assets_list=$(gh release view "$TAG" --repo "$REPO" --json assets -q '.assets[].name' ||
         die "could not list assets for $TAG in $REPO")
     [[ -n "$assets_list" ]] || die "no assets found for $TAG in $REPO"
-    asset_count=0
+    local asset stem asset_count=0
     while IFS= read -r asset; do
         [[ -n "$asset" ]] || continue
         case "$asset" in
@@ -223,9 +228,10 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
     done <<<"$assets_list"
     ((asset_count > 0)) || die "no platform archives found for $TAG in $REPO"
     shopt -s nullglob
-    old_found=0
+    local old_found=0 dir
     for dir in "$TOOL_ROOT"/v*/; do
         [[ -d "$dir" ]] || continue
+        local dir_name
         dir_name="$(basename "$dir")"
         if [[ "$dir_name" != "$TAG" ]]; then
             log INFO "would remove old $dir_name"
@@ -236,6 +242,172 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
         log INFO "no old version folders to remove"
     fi
     log INFO "dry run complete: would update $TOOL_ROOT/$TAG"
+}
+
+# verify_checksums checks the downloaded archives against the release's
+# checksums file, when the release ships one. A missing file aborts the
+# refresh when UPDATE_REQUIRE_CHECKSUMS=1 (the runner-spawner bundle).
+verify_checksums() {
+    local checksums_file=""
+    local candidate
+    for candidate in checksums.txt SHA256SUMS.txt; do
+        if [[ -f "$TMP_DIR/$candidate" ]]; then
+            checksums_file="$TMP_DIR/$candidate"
+            break
+        fi
+    done
+    if [[ -z "$checksums_file" ]]; then
+        if [[ "$UPDATE_REQUIRE_CHECKSUMS" == "1" ]]; then
+            die "no checksums.txt/SHA256SUMS.txt in $TAG release; refusing to install unverified binaries"
+        fi
+        log WARNING "no checksums in $TAG release; skipping verification"
+        return
+    fi
+    log INFO "verifying checksums ($(basename "$checksums_file"))..."
+    # The checksums file may be cumulative across releases (or list every
+    # uploaded asset), so verify only the archives downloaded for this run.
+    local checksum_tool=""
+    if command -v shasum >/dev/null 2>&1; then
+        checksum_tool="shasum -a 256"
+    elif command -v sha256sum >/dev/null 2>&1; then
+        checksum_tool="sha256sum"
+    fi
+    [[ -n "$checksum_tool" ]] || die "checksums file present but neither shasum nor sha256sum found"
+    local verify_list="$TMP_DIR/.verify-list"
+    : >"$verify_list"
+    local archive base
+    for archive in "${archives[@]}"; do
+        base="$(basename "$archive")"
+        grep -F " $base" "$checksums_file" >>"$verify_list" ||
+            die "no checksum entry for downloaded asset $base in $(basename "$checksums_file")"
+    done
+    # Entries are "<sha>  <name>" (or with a leading *), relative to $TMP_DIR.
+    (cd "$TMP_DIR" && $checksum_tool -c "$verify_list") || die "checksum verification failed for $TAG"
+    log INFO "checksums verified"
+}
+
+# extract_archive unpacks one archive into a destination directory,
+# format-agnostic (.tar.gz, .zip, legacy .7z).
+extract_archive() {
+    local archive="$1" dest="$2"
+    case "$archive" in
+    *.tar.gz)
+        tar -xzf "$archive" -C "$dest"
+        ;;
+    *.zip)
+        need_cmd unzip
+        unzip -q "$archive" -d "$dest"
+        ;;
+    *.7z)
+        if command -v 7zz >/dev/null 2>&1; then
+            7zz x -y "$archive" -o"$dest" >/dev/null
+        elif command -v 7z >/dev/null 2>&1; then
+            7z x -y "$archive" -o"$dest" >/dev/null
+        else
+            die "legacy .7z asset $(basename "$archive") requires 7z/7zz (this release predates platform-native archives)"
+        fi
+        ;;
+    *)
+        die "unsupported archive format: $archive"
+        ;;
+    esac
+}
+
+# install_archive extracts one downloaded archive and installs the binary
+# (plus any UPDATE_EXTRAS) into the staging directory.
+install_archive() {
+    local archive="$1"
+    local base stem extract_dir bin_src cand
+    base="$(basename "$archive")"
+    stem="$(strip_archive_ext "$base")"
+    if ! parse_stem_to_platform "$stem"; then
+        die "unknown platform in asset '$base' (expected <os>-<arch> such as darwin-arm64)"
+    fi
+    if [[ -e "$STAGE_DIR/$PLATFORM" ]]; then
+        die "duplicate asset for platform $PLATFORM (from $base)"
+    fi
+    log INFO "extracting $base -> $TAG/$PLATFORM"
+    extract_dir="$TMP_DIR/extract-$PLATFORM"
+    mkdir -p "$extract_dir"
+    extract_archive "$archive" "$extract_dir"
+    bin_src=""
+    for cand in "$extract_dir/$UPDATE_BIN" "$extract_dir/$UPDATE_BIN.exe"; do
+        if [[ -f "$cand" ]]; then
+            bin_src="$cand"
+            break
+        fi
+    done
+    if [[ -z "$bin_src" ]]; then
+        # Some archives nest everything under a single top-level directory.
+        for cand in "$extract_dir"/*/"$UPDATE_BIN" "$extract_dir"/*/"$UPDATE_BIN.exe"; do
+            if [[ -f "$cand" ]]; then
+                bin_src="$cand"
+                break
+            fi
+        done
+    fi
+    [[ -n "$bin_src" ]] || die "no $UPDATE_BIN binary in $base (expected $UPDATE_BIN)"
+    local bin_name target_dir extra
+    bin_name="$(basename "$bin_src")"
+    target_dir="$STAGE_DIR/$PLATFORM"
+    mkdir -p "$target_dir"
+    cp -p "$bin_src" "$target_dir/$bin_name"
+    chmod +x "$target_dir/$bin_name"
+    [[ -s "$target_dir/$bin_name" ]] || die "installed binary is empty: $target_dir/$bin_name"
+    for extra in $UPDATE_EXTRAS; do
+        if [[ -e "$extract_dir/$extra" ]]; then
+            cp -pr "$extract_dir/$extra" "$target_dir/"
+        fi
+    done
+    log INFO "installed $PLATFORM/$bin_name (from $base)"
+    rm -rf -- "$extract_dir"
+}
+
+# report_host_binary smoke-tests the bundled binary for this machine and
+# warns when its version does not contain the tag.
+report_host_binary() {
+    local tag_dir="$1"
+    local platform host_bin cand
+    platform="$(host_platform)"
+    host_bin=""
+    for cand in "$tag_dir/$platform/$UPDATE_BIN" "$tag_dir/$platform/$UPDATE_BIN.exe"; do
+        if [[ -x "$cand" ]]; then
+            host_bin="$cand"
+        fi
+    done
+    if [[ -z "$host_bin" ]]; then
+        log WARNING "host platform $platform not in bundle; skipped version check"
+        return
+    fi
+    local host_ver
+    host_ver="$("$host_bin" --version 2>&1 || true)"
+    log INFO "host binary $platform reports: $host_ver"
+    case "$host_ver" in
+    *"$TAG"* | *"${TAG#v}"*) ;;
+    *) log WARNING "host binary version '$host_ver' does not contain $TAG" ;;
+    esac
+}
+
+need_cmd gh
+need_cmd tar
+
+TOOL_ROOT="$SCRIPT_DIR/$UPDATE_TOOL"
+[[ -d "$TOOL_ROOT" ]] || die "$UPDATE_TOOL bundle directory not found: $TOOL_ROOT"
+log INFO "$UPDATE_TOOL bundle directory: $TOOL_ROOT"
+log INFO "repository: $REPO"
+
+if [[ -z "$TAG" ]]; then
+    TAG="$(gh release view --repo "$REPO" --json tagName -q .tagName)" ||
+        die "could not determine latest release from $REPO (is gh authenticated and the repo visible?)"
+fi
+[[ -n "$TAG" ]] || die "could not determine release tag from $REPO"
+if ! [[ "$TAG" =~ ^v[0-9]+(\.[0-9]+)+$ ]]; then
+    die "invalid tag '$TAG' (expected vX.Y.Z...)"
+fi
+log INFO "release tag: $TAG"
+
+if [[ "$DRY_RUN" -eq 1 ]]; then
+    print_dry_run
     exit 0
 fi
 
@@ -269,109 +441,10 @@ done
 ((${#archives[@]} > 0)) || die "no platform archives downloaded from $REPO $TAG"
 log INFO "downloaded ${#archives[@]} platform archives"
 
-checksums_file=""
-for candidate in checksums.txt SHA256SUMS.txt; do
-    if [[ -f "$TMP_DIR/$candidate" ]]; then
-        checksums_file="$TMP_DIR/$candidate"
-        break
-    fi
-done
-if [[ -n "$checksums_file" ]]; then
-    log INFO "verifying checksums ($(basename "$checksums_file"))..."
-    # The checksums file may be cumulative across releases (or list every
-    # uploaded asset), so verify only the archives downloaded for this run.
-    checksum_tool=""
-    if command -v shasum >/dev/null 2>&1; then
-        checksum_tool="shasum -a 256"
-    elif command -v sha256sum >/dev/null 2>&1; then
-        checksum_tool="sha256sum"
-    fi
-    [[ -n "$checksum_tool" ]] || die "checksums file present but neither shasum nor sha256sum found"
-    verify_list="$TMP_DIR/.verify-list"
-    : >"$verify_list"
-    for archive in "${archives[@]}"; do
-        base="$(basename "$archive")"
-        grep -F " $base" "$checksums_file" >>"$verify_list" ||
-            die "no checksum entry for downloaded asset $base in $(basename "$checksums_file")"
-    done
-    # Entries are "<sha>  <name>" (or with a leading *), relative to $TMP_DIR.
-    (cd "$TMP_DIR" && $checksum_tool -c "$verify_list") || die "checksum verification failed for $TAG"
-    log INFO "checksums verified"
-elif [[ "$UPDATE_REQUIRE_CHECKSUMS" == "1" ]]; then
-    die "no checksums.txt/SHA256SUMS.txt in $TAG release; refusing to install unverified binaries"
-else
-    log WARNING "no checksums in $TAG release; skipping verification"
-fi
-
-# Extract one archive into a destination directory, format-agnostic.
-extract_archive() {
-    local archive="$1" dest="$2"
-    case "$archive" in
-    *.tar.gz)
-        tar -xzf "$archive" -C "$dest"
-        ;;
-    *.zip)
-        need_cmd unzip
-        unzip -q "$archive" -d "$dest"
-        ;;
-    *.7z)
-        if command -v 7zz >/dev/null 2>&1; then
-            7zz x -y "$archive" -o"$dest" >/dev/null
-        elif command -v 7z >/dev/null 2>&1; then
-            7z x -y "$archive" -o"$dest" >/dev/null
-        else
-            die "legacy .7z asset $(basename "$archive") requires 7z/7zz (this release predates platform-native archives)"
-        fi
-        ;;
-    *)
-        die "unsupported archive format: $archive"
-        ;;
-    esac
-}
+verify_checksums
 
 for archive in "${archives[@]}"; do
-    base="$(basename "$archive")"
-    stem="$(strip_archive_ext "$base")"
-    if ! parse_stem_to_platform "$stem"; then
-        die "unknown platform in asset '$base' (expected <os>-<arch> such as darwin-arm64)"
-    fi
-    if [[ -e "$STAGE_DIR/$PLATFORM" ]]; then
-        die "duplicate asset for platform $PLATFORM (from $base)"
-    fi
-    log INFO "extracting $base -> $TAG/$PLATFORM"
-    extract_dir="$TMP_DIR/extract-$PLATFORM"
-    mkdir -p "$extract_dir"
-    extract_archive "$archive" "$extract_dir"
-    bin_src=""
-    for cand in "$extract_dir/$UPDATE_BIN" "$extract_dir/$UPDATE_BIN.exe"; do
-        if [[ -f "$cand" ]]; then
-            bin_src="$cand"
-            break
-        fi
-    done
-    if [[ -z "$bin_src" ]]; then
-        # Some archives nest everything under a single top-level directory.
-        for cand in "$extract_dir"/*/"$UPDATE_BIN" "$extract_dir"/*/"$UPDATE_BIN.exe"; do
-            if [[ -f "$cand" ]]; then
-                bin_src="$cand"
-                break
-            fi
-        done
-    fi
-    [[ -n "$bin_src" ]] || die "no $UPDATE_BIN binary in $base (expected $UPDATE_BIN)"
-    bin_name="$(basename "$bin_src")"
-    target_dir="$STAGE_DIR/$PLATFORM"
-    mkdir -p "$target_dir"
-    cp -p "$bin_src" "$target_dir/$bin_name"
-    chmod +x "$target_dir/$bin_name"
-    [[ -s "$target_dir/$bin_name" ]] || die "installed binary is empty: $target_dir/$bin_name"
-    for extra in $UPDATE_EXTRAS; do
-        if [[ -e "$extract_dir/$extra" ]]; then
-            cp -pr "$extract_dir/$extra" "$target_dir/"
-        fi
-    done
-    log INFO "installed $PLATFORM/$bin_name (from $base)"
-    rm -rf -- "$extract_dir"
+    install_archive "$archive"
 done
 
 TAG_DIR="$TOOL_ROOT/$TAG"
@@ -389,37 +462,7 @@ for dir in "$TOOL_ROOT"/v*/; do
     fi
 done
 
-# Best-effort host verification: run the bundled binary for this machine.
-host_os_raw="$(uname -s | tr '[:upper:]' '[:lower:]')"
-host_arch_raw="$(uname -m | tr '[:upper:]' '[:lower:]')"
-case "$host_os_raw" in
-darwin*) host_os="macos" ;;
-linux*) host_os="linux" ;;
-msys* | mingw* | cygwin* | windows* | win*) host_os="windows" ;;
-*) host_os="$host_os_raw" ;;
-esac
-case "$host_arch_raw" in
-x86_64 | amd64) host_arch="x86_64" ;;
-arm64 | aarch64) host_arch="arm64" ;;
-*) host_arch="$host_arch_raw" ;;
-esac
-host_platform="$host_os-$host_arch"
-host_bin=""
-for cand in "$TAG_DIR/$host_platform/$UPDATE_BIN" "$TAG_DIR/$host_platform/$UPDATE_BIN.exe"; do
-    if [[ -x "$cand" ]]; then
-        host_bin="$cand"
-    fi
-done
-if [[ -n "$host_bin" ]]; then
-    host_ver="$("$host_bin" --version 2>&1 || true)"
-    log INFO "host binary $host_platform reports: $host_ver"
-    case "$host_ver" in
-    *"$TAG"* | *"${TAG#v}"*) ;;
-    *) log WARNING "host binary version '$host_ver' does not contain $TAG" ;;
-    esac
-else
-    log WARNING "host platform $host_platform not in bundle; skipped version check"
-fi
+report_host_binary "$TAG_DIR"
 
 log INFO "done: $TAG_DIR now contains:"
 for dir in "$TAG_DIR"/*/; do

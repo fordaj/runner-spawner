@@ -23,7 +23,7 @@ flowchart LR
 
 - `FindConfigFile(repoDir)` checks `<repoDir>/.runner-spawner.json`, then `./.runner-spawner.json`; `""` when neither exists.
 - `LoadFile` parses with `DisallowUnknownFields` — unknown keys fail fast, so typos in the committed file are caught on first run. `WindowsPassword` is `json:"-"` and never serialised.
-- `ApplyEnv` overlays the `RUNNER_SPAWNER_*` variables (see the `Env*` constants). `RUNNER_SPAWNER_CONFIG` (file selection) and `RUNNER_SPAWNER_TOKEN` (see [token.go.md](token.go.md)) are consumed elsewhere and are intentionally not applied here. `getenv` is injectable for tests.
+- `ApplyEnv` overlays the `RUNNER_SPAWNER_*` variables (see the `Env*` constants): a table drives the plain string overlays and the boolean ones, with list-valued and format-special cases handled separately. `RUNNER_SPAWNER_CONFIG` (file selection) and `RUNNER_SPAWNER_TOKEN` (see [token.go.md](token.go.md)) are consumed elsewhere and are intentionally not applied here. `getenv` is injectable for tests.
 - `ParseList` splits comma-separated values; `ParseBool` parses boolean env values.
 
 ## Validation and resolution

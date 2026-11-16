@@ -23,28 +23,29 @@ func parseRemoteURL(raw string) (owner, repo string, err error) {
 	// Strip trailing slash, then .git suffix.
 	s = strings.TrimSuffix(s, "/")
 	s = strings.TrimSuffix(s, ".git")
-	// Strip scheme if present.
-	if i := strings.Index(s, "://"); i >= 0 {
-		s = s[i+3:]
-		// ssh://git@github.com/... or https://github.com/... or git://...
+	switch {
+	case strings.Contains(s, "://"):
+		// https://, ssh://, git:// — drop the scheme and any userinfo.
+		s = s[strings.Index(s, "://")+3:]
 		if at := strings.LastIndex(s, "@"); at >= 0 {
 			s = s[at+1:]
 		}
-	} else if at := strings.Index(s, "@"); at >= 0 {
-		// scp-style git@github.com:owner/repo
-		if colon := strings.Index(s[at+1:], ":"); colon >= 0 {
-			s = s[at+1+colon+1:]
-		} else {
+	case strings.Contains(s, "@"):
+		// scp-style git@host:owner/repo — the colon ends the host part.
+		after := s[strings.Index(s, "@")+1:]
+		colon := strings.Index(after, ":")
+		if colon < 0 {
 			return "", "", unrecognisedRemote(raw)
 		}
+		s = after[colon+1:]
 	}
-	// Now s should be host/owner/repo.
+	// Now s should be host/owner/repo (or owner/repo for scp-style);
+	// only the last two segments matter.
 	parts := strings.Split(s, "/")
-	owner, repo = "", ""
-	if len(parts) >= 2 {
-		owner = parts[len(parts)-2]
-		repo = parts[len(parts)-1]
+	if len(parts) < 2 {
+		return "", "", unrecognisedRemote(raw)
 	}
+	owner, repo = parts[len(parts)-2], parts[len(parts)-1]
 	if owner == "" || repo == "" {
 		return "", "", unrecognisedRemote(raw)
 	}

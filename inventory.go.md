@@ -25,7 +25,7 @@ flowchart TD
 
 - `ghAPI` runs `gh api` (through the same `commandExecution` seam tests use, so no network in tests); `ghError` classifies failures (rate limit / 401 / 403 / 404) with actionable hints.
 - `ghRunners` queries `repos/{owner}/{repo}/actions/runners` or `orgs/{org}/actions/runners` with `--paginate --jq '.runners[]'`; `parseRunnerNDJSON` decodes one JSON object per line, de-duplicating runners reached via multiple paths. `repoInventory`/`orgInventory` are the per-scope entry points, both backed by `runnersInventory`.
-- `owner` aggregate scope has no universal endpoint, so `collectOwnerInventory` enumerates repositories visible to the token (`orgs/{org}/repos?type=all` for organizations, `users/{owner}/repos?type=owner` otherwise — `isOrg` probes `orgs/{owner}`) and queries each repository.
+- `owner` aggregate scope has no universal endpoint, so `collectOwnerInventory` probes `isOrg` (`orgs/{owner}`) and delegates to `collectOrgInventory` (org-level runners, then `orgs/{org}/repos?type=all`) or `collectUserInventory` (`users/{owner}/repos?type=owner`) and queries each repository.
 - Inaccessible targets are **partial failures** (`InventoryFailure`), never aborts: what was gathered is still printed, the command exits `1` with `failures[]` populated. Empty inventory with no failures is a success.
 
 ## Output

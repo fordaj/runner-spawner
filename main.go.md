@@ -30,7 +30,7 @@ flowchart TD
 ## Shape
 
 - `main()` maps `run()`'s error to the exit code via `exitCode()`. `codedError` carries an explicit code; everything else is `1`. `reportedError` marks errors whose message was already printed (flag package output), so `run` does not print twice.
-- `runInner` handles `--help`/`-h`/`help`, `--version`/`-version`/`version`, the verb subcommands (`create`, `remove`, `start`, `stop`, `status`, `list`), `init`, and usage errors for anything else.
+- `runInner` handles `--help`/`-h`/`help`, `--version`/`-version`/`version`, the verb subcommands (`create`, `remove`, `start`, `stop`, `status`, `list`), `init`, and usage errors for anything else. `printUsage` prints the `usageText` table line by line (help and subcommand-error paths share it).
 - `runVerb` parses the shared flag set (`--config`, `--repo-dir`, `--owner`, `--repo`, `--name` [repeatable/comma-separated via `nameFlag`], `--scope`, `--org`, `--github`, plus runner-shaping knobs), then layers configuration: built-in defaults → git remote (owner/repo only, [git.go.md](git.go.md)) → `.runner-spawner.json` ([config.go.md](config.go.md)) → `RUNNER_SPAWNER_*` env vars → CLI flags. Format is validated (`text`|`json`) before dispatch.
 - `resolveScope` (see [scope.go.md](scope.go.md)) decides local vs. GitHub-inventory mode; inventory mode is dispatched to `runInventory` (see [inventory.go.md](inventory.go.md)), otherwise list/status/mutation logic lives in [verbs.go.md](verbs.go.md).
 
