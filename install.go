@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -90,10 +91,10 @@ func nowRFC3339() string { return time.Now().UTC().Format(time.RFC3339) }
 func serviceMetaFor(cfg *Config, p platform, name string) ServiceMeta {
 	switch {
 	case p.IsWindows:
-		return ServiceMeta{Type: "windows-service", Name: windowsServiceName(cfg, name)}
+		return ServiceMeta{Type: "windows-service", Name: serviceName(cfg, name)}
 	case p.GOOS == "darwin":
 		// svc.sh is backed by a per-user LaunchAgent plist.
-		return ServiceMeta{Type: "svc-sh", Name: macosServiceLabel(cfg, name)}
+		return ServiceMeta{Type: "svc-sh", Name: serviceName(cfg, name)}
 	case p.GOOS == "linux":
 		return ServiceMeta{Type: "svc-sh", Name: ""}
 	default:
@@ -110,10 +111,7 @@ func buildInstallationMeta(cfg *Config, p platform, name, dir, createdAt string)
 		repoDir = abs
 	}
 	repoDir = filepath.Clean(repoDir)
-	full := ""
-	if cfg.Owner != "" && cfg.Repo != "" {
-		full = cfg.Owner + "/" + cfg.Repo
-	}
+	full := repoFullName(cfg)
 	if createdAt == "" {
 		createdAt = nowRFC3339()
 	}
@@ -152,7 +150,7 @@ func readInstallMarker(dir string) (InstallationMeta, error) {
 	if err != nil {
 		return meta, err
 	}
-	dec := json.NewDecoder(strings.NewReader(string(data)))
+	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&meta); err != nil {
 		return InstallationMeta{}, fmt.Errorf("%s: %w", installMarkerFile, err)
@@ -289,10 +287,11 @@ func registerInstallation(meta InstallationMeta) error {
 			reg.Installations = append(reg.Installations, meta)
 		}
 		sort.Slice(reg.Installations, func(i, j int) bool {
-			if reg.Installations[i].InstallationDir == reg.Installations[j].InstallationDir {
-				return reg.Installations[i].Name < reg.Installations[j].Name
+			a, b := reg.Installations[i], reg.Installations[j]
+			if a.InstallationDir == b.InstallationDir {
+				return a.Name < b.Name
 			}
-			return reg.Installations[i].InstallationDir < reg.Installations[j].InstallationDir
+			return a.InstallationDir < b.InstallationDir
 		})
 		return saveRegistry(reg)
 	})
@@ -351,14 +350,8 @@ func repoMatches(cfg *Config, m InstallationMeta) bool {
 			return true
 		}
 	}
-	want := ""
-	if cfg.Owner != "" && cfg.Repo != "" {
-		want = cfg.Owner + "/" + cfg.Repo
-	}
-	if want != "" && m.RepoFullName != "" && repoFullNamesEqual(want, m.RepoFullName) {
-		return true
-	}
-	return false
+	want := repoFullName(cfg)
+	return want != "" && m.RepoFullName != "" && repoFullNamesEqual(want, m.RepoFullName)
 }
 
 // synthesizedMeta builds metadata for an installation in the current

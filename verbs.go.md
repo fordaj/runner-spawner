@@ -47,7 +47,12 @@ flowchart TD
 
 ## Windows account prompt
 
-`promptLine`/`promptPassword` drive the interactive prompts for the Windows service account (`--windows-username`/`--windows-password`, env vars, or interactive). Passwords are never printed and never written to the config file.
+`readPromptLine` drives the interactive prompt for the Windows service account (`--windows-username`/`--windows-password`, env vars, or interactive); callers prompting for a secret print a trailing newline themselves. Passwords are never printed and never written to the config file.
+
+## Shared helpers
+
+- `newLoggers(cfg, stderr)` — the `logf` (suppressed by `--quiet`) and `warnf` (always prints) closures used by every mutating verb.
+- `scMissingService(err, out)` — whether a failed `sc.exe` call means the service is gone (exit 1060/1072, or the raw code in the output), used for the Windows not-installed probe and for tolerating `sc.exe delete` against an absent service.
 
 ## Related pages
 

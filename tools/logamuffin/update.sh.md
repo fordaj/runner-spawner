@@ -25,7 +25,9 @@ The scripts themselves document the contract (`log INFO "..."`), the `LOG_LEVEL`
 
 ## `update.sh` in detail
 
-Refreshes from `fordaj/logamuffin` releases: platform archives whose stem ends in an `<os>-<arch>` suffix (`darwin-arm64`, `windows-x86_64`, … — mapped onto the bundle layout, e.g. `darwin-amd64` → `macos-x86_64`), in `.tar.gz` on macOS/Linux and `.zip` on Windows (legacy `.7z` accepted), verified against the release's `checksums.txt`/`SHA256SUMS.txt` when present — warning rather than fatal when absent. Only the binary is kept. Stages into a temporary directory inside the bundle, swaps in atomically, prunes superseded `v*/` folders only after the new one is staged, and smoke-tests the host binary. Environment overrides: `LOGAMUFFIN_REPO`, `LOGAMUFFIN_TAG`. See [../README.md](../README.md) for the shared bundle contract (`--dry-run`, `--tag`, staged atomic swap).
+Refreshes from `fordaj/logamuffin` releases via the shared implementation in [../update.sh.md](../update.sh.md). Bundle-specific behaviour: accepts every platform archive, maps its `<os>-<arch>` suffix onto the bundle layout (e.g. `darwin-amd64` → `macos-x86_64`), verifies against the release's `checksums.txt`/`SHA256SUMS.txt` when present — warning rather than fatal when absent. Only the binary is kept. Smoke-tests the host binary.
+
+Environment overrides: `LOGAMUFFIN_REPO`, `LOGAMUFFIN_TAG`. `--dry-run` lists planned assets without touching anything.
 
 ## Related pages
 

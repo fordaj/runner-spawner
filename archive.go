@@ -303,11 +303,13 @@ func extractZip(archivePath, dir string) error {
 		if copyErr != nil {
 			return copyErr
 		}
+		if closeErr != nil {
+			return closeErr
+		}
 		// Preserve the executable bit from the zip (config.cmd etc.).
 		if f.FileInfo().Mode().Perm() != 0 {
 			_ = os.Chmod(target, f.FileInfo().Mode().Perm())
 		}
-		_ = closeErr
 	}
 	return nil
 }

@@ -2,8 +2,9 @@
 
 ```mermaid
 flowchart TD
-    Tools[tools/&lt;name&gt;] --> Upd[update.sh<br/>refresh from upstream release]
-    Upd --> DL[gh release download<br/>platform archives]
+    Tools[tools/&lt;name&gt;] --> Upd[update.sh<br/>thin wrapper per bundle]
+    Upd --> Shared[tools/update.sh<br/>shared implementation]
+    Shared --> DL[gh release download<br/>platform archives]
     DL --> Verify{checksums.txt<br/>present?}
     Verify -->|yes| OK[verify SHA-256]
     Verify -->|no| Warn[warn · continue<br/>runner-spawner aborts]
@@ -12,6 +13,7 @@ flowchart TD
     Stage --> Swap[atomic swap<br/>delete superseded v*/]
     Swap --> Smoke[smoke test<br/>--version]
     click Upd href "barnacle/update.sh.md"
+    click Shared href "update.sh.md"
 ```
 
 `tools/` carries the repository's pinned helper binaries — release, logging, docs, and formatting tooling — plus one `update.sh` per tool that refreshes them. These are **not** the GitHub Actions runner the CLI installs (the runner archive is downloaded and cached per repository under `<runnersDir>/cache/`); they are the tools used to build, release, log, and document this repository itself.
@@ -28,7 +30,7 @@ tools/<name>/
 
 - Binaries are pinned by version directory; the pinned version is named by `*_VERSION_DIR` in [`scripts/.common.env`](../scripts/env.sh.md) (except formattington-lite, which is standalone — see its page).
 - `<platform>` is the hyphenated `<os>-<arch>` name (`linux-x86_64`, `macos-arm64`, `windows-x86_64`, …).
-- `update.sh` downloads the latest (or `--tag`ged) upstream release via `gh`, verifies checksums, stages into a temporary directory **inside the bundle**, swaps the version directory in atomically, and deletes superseded version folders only after the new one is staged — a failed refresh leaves the previous bundle intact. Each script has `--dry-run`, `--help`, and resolves its own directory, so it can run from anywhere.
+- `update.sh` downloads the latest (or `--tag`ged) upstream release via `gh`, verifies checksums, stages into a temporary directory **inside the bundle**, swaps the version directory in atomically, and deletes superseded version folders only after the new one is staged — a failed refresh leaves the previous bundle intact. Each script has `--dry-run`, `--help`, and resolves its own directory, so it can run from anywhere. The five bundles share one implementation, [update.sh](update.sh.md); each bundle's `update.sh` is a thin wrapper that exports the bundle's parameters.
 - Only the binary is kept, except [barnacle](barnacle/update.sh.md) (upstream `LICENSE` copied next to each binary when present) and [formattington-lite](formattington-lite/update.sh.md) (`NOTICE.md` and `LICENSES/` when present).
 
 ## The bundles
@@ -40,6 +42,8 @@ tools/<name>/
 | [runner-spawner](runner-spawner/update.sh.md) | Manages self-hosted GitHub Actions runners — this repository dogfoods its own released CLI | [update.sh](runner-spawner/update.sh.md) |
 | [barnacle](barnacle/update.sh.md) | Renders this documentation site | [update.sh](barnacle/update.sh.md) |
 | [formattington-lite](formattington-lite/update.sh.md) | Formattington's bare program (not wired into the env cascade) | [update.sh](formattington-lite/update.sh.md) |
+
+The shared implementation behind all five wrappers is [update.sh](update.sh.md).
 
 `scripts/.common.env` and `scripts/.<platform>.env` select the cascade-backed four via `*_VERSION_DIR`/`*_BIN`; see [env.sh.md](../scripts/env.sh.md). Archives are platform-native (`.tar.gz` on macOS/Linux, `.zip` on Windows); legacy `.7z` assets are still accepted as a fallback (a p7zip install is only needed until such releases age out).
 

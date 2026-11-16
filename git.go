@@ -7,6 +7,11 @@ import (
 	"strings"
 )
 
+// unrecognisedRemote builds the error returned for an unparseable remote URL.
+func unrecognisedRemote(raw string) error {
+	return fmt.Errorf("unrecognised remote URL %q (expected <host>/owner/repo)", raw)
+}
+
 // parseRemoteURL extracts (owner, repo) from a GitHub remote URL. It accepts
 // the forms git produces: scp-style (git@github.com:owner/repo.git),
 // ssh://, https://, and git:// — with or without .git and trailing slash.
@@ -30,7 +35,7 @@ func parseRemoteURL(raw string) (owner, repo string, err error) {
 		if colon := strings.Index(s[at+1:], ":"); colon >= 0 {
 			s = s[at+1+colon+1:]
 		} else {
-			return "", "", fmt.Errorf("unrecognised remote URL %q", raw)
+			return "", "", unrecognisedRemote(raw)
 		}
 	}
 	// Now s should be host/owner/repo.
@@ -41,10 +46,10 @@ func parseRemoteURL(raw string) (owner, repo string, err error) {
 		repo = parts[len(parts)-1]
 	}
 	if owner == "" || repo == "" {
-		return "", "", fmt.Errorf("unrecognised remote URL %q (expected <host>/owner/repo)", raw)
+		return "", "", unrecognisedRemote(raw)
 	}
 	if strings.ContainsAny(owner, " \t\n") || strings.ContainsAny(repo, " \t\n") {
-		return "", "", fmt.Errorf("unrecognised remote URL %q (expected <host>/owner/repo)", raw)
+		return "", "", unrecognisedRemote(raw)
 	}
 	return owner, repo, nil
 }

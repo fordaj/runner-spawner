@@ -28,7 +28,7 @@ flowchart LR
 
 ## Validation and resolution
 
-- `Validate(needRepo, nameArg)` requires non-empty `RunnersDir`/`RunnerGroup`/`RunnerVersion`; owner/repo only when `needRepo` (create/remove).
+- `Validate(needRepo)` requires non-empty `RunnersDir`/`RunnerGroup`/`RunnerVersion`; owner/repo only when `needRepo` (create/remove).
 - `ResolveNames(flagNames)` — explicit `--name` wins over config/env; empty means the caller errors if it needs names.
 - `RunnersRoot()` — absolute `<RepoDir>/<RunnersDir>` (or `RunnersDir` if absolute); `ArchiveCache()` — `<RunnersRoot>/cache` unless overridden; `AbsRepoDir()` returns the absolute repo dir.
 

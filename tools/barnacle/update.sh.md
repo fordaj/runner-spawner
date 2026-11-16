@@ -33,12 +33,7 @@ All six platforms are bundled. The pinned v0.0.1.0.17 bundle in this repository 
 
 ## `update.sh` in detail
 
-The script:
-
-1. Resolves the tag (latest release, or `--tag vX.Y.Z...`), validating the tag shape (`^v[0-9]+(\.[0-9]+)+$`).
-2. Downloads via `gh` (`*.tar.gz`, `*.zip`, legacy `*.7z`, plus `checksums.txt`/`SHA256SUMS.txt`), then verifies the downloaded archives against the checksums file (`shasum -a 256 -c` or `sha256sum -c`); a missing checksums file is a warning, not fatal.
-3. Extracts each archive and copies the binary into `v<tag>/<platform>/`. When an extracted archive ships a `LICENSE` file, it is copied next to the binary in the same platform directory.
-4. Swaps in the new version directory and deletes superseded ones, then smoke-tests the host binary (`barnacle --version`), warning if the reported version does not contain the tag.
+The script is a thin wrapper around [../update.sh.md](../update.sh.md) (the shared implementation). Bundle-specific behaviour: it refreshes from `fordaj/barnacle` releases, accepts every platform archive, keeps the `barnacle[.exe]` binary, copies the upstream MIT `LICENSE` next to each binary when present, and warns (rather than aborts) when a release ships no checksums file.
 
 Environment overrides: `BARNACLE_REPO`, `BARNACLE_TAG`. `--dry-run` lists assets and planned deletions without touching anything.
 
