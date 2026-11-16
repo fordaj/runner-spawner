@@ -14,11 +14,11 @@ flowchart TD
     click Release href "../../scripts/release.sh.md"
 ```
 
-[Runner-spawner](https://github.com/fordaj/runner-spawner) **is this repository** — the same CLI this tree builds from source. This bundle pins the latest *released* binaries so scripts and CI can run the published artifact without building it. The currently pinned release is **`v0.0.1.2.6`**; the committed `.runner-spawner.json` targets this repository itself (`owner: fordaj`, `repo: runner-spawner`, `runnerNames: ["runner01"]`).
+[Runner-spawner](https://github.com/fordaj/runner-spawner) **is this repository** — the same CLI this tree builds from source. This bundle pins the latest *released* binaries so scripts and CI can run the published artifact without building it. The currently pinned release is **`v0.0.1.2.15`**; the committed `.runner-spawner.json` targets this repository itself (`owner: fordaj`, `repo: runner-spawner`, `runnerNames: ["runner01"]`).
 
 ## Bundled platforms
 
-`v0.0.1.2.6/macos-arm64`, `macos-x86_64`, `linux-arm64`, `linux-x86_64`, `windows-arm64`, `windows-x86_64`. Note: runner-spawner reports unsupported on Linux (macOS + Windows only); the Linux binaries are shipped for uniform bundle layout, and the Linux platform env files carry this caveat.
+`v0.0.1.2.15/macos-arm64`, `macos-x86_64`, `linux-arm64`, `linux-x86_64`, `windows-arm64`, `windows-x86_64`. Note: runner-spawner reports unsupported on Linux (macOS + Windows only); the Linux binaries are shipped for uniform bundle layout, and the Linux platform env files carry this caveat.
 
 The pinned binary selection goes through the [env cascade](../../scripts/env.sh.md) (`RUNNER_SPAWNER_BIN`). The bundle refresh deliberately uses a different variable name — `RUNNER_SPAWNER_TOOL_REPO` (set in `.common.env`, defaulting to `fordaj/runner-spawner`) — because `RUNNER_SPAWNER_REPO` is this CLI's own env var for the *target* repository a runner should be created for. Do not confuse the two.
 
