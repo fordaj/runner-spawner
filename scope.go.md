@@ -2,19 +2,25 @@
 
 ```mermaid
 flowchart TD
-    Flags[--scope --org --github --repo] --> Resolve[resolveScope<br/>per-verb validation]
-    Resolve --> Local{local scope?}
-    Local -->|directory| Root[configured runners-dir only]
-    Local -->|repo| Disco[discoveredTargets<br/>discoverInstallations<br/>install.go.md]
+    Flags("<img src='barnacle:terminal.svg' width='20' alt=''/><br/>--scope --org --github --repo") --> Resolve("<img src='barnacle:file-code.svg' width='20' alt=''/><br/>resolveScope<br/>per-verb validation")
+    Resolve --> Local{{"<img src='barnacle:hexagon.svg' width='20' alt=''/><br/>local scope?"}}
+    Local -->|directory| Root("<img src='barnacle:folder.svg' width='20' alt=''/><br/>configured runners-dir only")
+    Local -->|repo| Disco("<img src='barnacle:file-code.svg' width='20' alt=''/><br/><u>discoveredTargets<br/>discoverInstallations<br/>install.go.md</u>")
     Local -->|pc| Disco
-    Local -->|no - status only| Inv[GitHub inventory<br/>inventory.go.md]
-    Disco --> Union[union with configured root<br/>sortDiscovered · filterByNames]
-    Root --> Batch[runBatch<br/>every target attempted]
+    Local -->|no - status only| Inv("<img src='barnacle:file-code.svg' width='20' alt=''/><br/><u>GitHub inventory<br/>inventory.go.md</u>")
+    Disco --> Union("<img src='barnacle:file-code.svg' width='20' alt=''/><br/>union with configured root<br/>sortDiscovered · filterByNames")
+    Root --> Batch("<img src='barnacle:file-code.svg' width='20' alt=''/><br/><u>runBatch<br/>every target attempted</u>")
     Union --> Batch
-    Batch --> Results([mutationResult per runner<br/>aggregate error at end])
+    Batch --> Results("<img src='barnacle:file-code.svg' width='20' alt=''/><br/>mutationResult per runner<br/>aggregate error at end")
     click Disco href "install.go.md"
     click Inv href "inventory.go.md"
     click Batch href "verbs.go.md"
+    class Resolve,Disco,Inv,Union,Batch,Results goFile
+    class Local hexNode
+    class Root folder
+    classDef goFile fill:#8fd8ef,stroke:#0277a8,color:#08303d
+    classDef hexNode fill:#ffe08a,stroke:#a16207,color:#422006
+    classDef folder fill:#f0c558,stroke:#8a6d1c,color:#332a05
 ```
 
 `scope.go` turns the `--scope`/`--org`/`--github` flags into either a **local** scope (`directory`|`repo`|`pc`) or a **GitHub inventory** scope (`repo`|`org`|`owner`, read-only, `status` only), and implements the shared batch runner for the mutating verbs.

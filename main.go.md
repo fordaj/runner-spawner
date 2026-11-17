@@ -2,20 +2,20 @@
 
 ```mermaid
 flowchart TD
-    Main[main] --> Run[run]
-    Run --> Help{--help / -h / help?}
-    Help -->|yes| Exit0([exit 0])
-    Help -->|no| Version{--version?}
-    Version -->|yes| Print([print toolVersion · exit 0])
-    Version -->|no| Verb{subcommand?}
-    Verb -->|create remove start stop status list| VerbRun[runVerb]
-    Verb -->|init| Init[runInit · init.go.md]
-    Verb -->|other| Usage([exit 2 · usage error])
-    VerbRun --> Layer[layer config<br/>defaults → file → env → flags]
-    GitRemote[git.go.md<br/>only while owner/repo unknown] --> Layer
-    Layer --> Resolve[resolveScope · scope.go.md]
-    Resolve -->|local| Verbs[verbs.go.md]
-    Resolve -->|GitHub inventory| Inv[inventory.go.md]
+    Main("<img src='barnacle:file-code.svg' width='20' alt=''/><br/>main") --> Run("<img src='barnacle:file-code.svg' width='20' alt=''/><br/>run")
+    Run --> Help{{"<img src='barnacle:hexagon.svg' width='20' alt=''/><br/>--help / -h / help?"}}
+    Help -->|yes| Exit0("<img src='barnacle:check.svg' width='20' alt=''/><br/>exit 0")
+    Help -->|no| Version{{"<img src='barnacle:hexagon.svg' width='20' alt=''/><br/>--version?"}}
+    Version -->|yes| Print("<img src='barnacle:check.svg' width='20' alt=''/><br/><u>print toolVersion · exit 0</u>")
+    Version -->|no| Verb{{"<img src='barnacle:hexagon.svg' width='20' alt=''/><br/>subcommand?"}}
+    Verb -->|create remove start stop status list| VerbRun("<img src='barnacle:file-code.svg' width='20' alt=''/><br/>runVerb")
+    Verb -->|init| Init("<img src='barnacle:file-code.svg' width='20' alt=''/><br/><u>runInit · init.go.md</u>")
+    Verb -->|other| Usage("<img src='barnacle:circle-exclamation-point.svg' width='20' alt=''/><br/>exit 2 · usage error")
+    VerbRun --> Layer("<img src='barnacle:file-code.svg' width='20' alt=''/><br/><u>layer config<br/>defaults → file → env → flags</u>")
+    GitRemote("<img src='barnacle:file-code.svg' width='20' alt=''/><br/><u>git.go.md<br/>only while owner/repo unknown</u>") --> Layer
+    Layer --> Resolve("<img src='barnacle:file-code.svg' width='20' alt=''/><br/><u>resolveScope · scope.go.md</u>")
+    Resolve -->|local| Verbs("<img src='barnacle:file-code.svg' width='20' alt=''/><br/><u>verbs.go.md</u>")
+    Resolve -->|GitHub inventory| Inv("<img src='barnacle:file-code.svg' width='20' alt=''/><br/><u>inventory.go.md</u>")
     click Init href "init.go.md"
     click Resolve href "scope.go.md"
     click Verbs href "verbs.go.md"
@@ -23,6 +23,14 @@ flowchart TD
     click Layer href "config.go.md"
     click GitRemote href "git.go.md"
     click Print href "version.go.md"
+    class Main,Run,VerbRun,Init,Layer,GitRemote,Resolve,Verbs,Inv goFile
+    class Help,Version,Verb hexNode
+    class Exit0,Print checkNode
+    class Usage errNode
+    classDef goFile fill:#8fd8ef,stroke:#0277a8,color:#08303d
+    classDef hexNode fill:#ffe08a,stroke:#a16207,color:#422006
+    classDef checkNode fill:#9fe8c9,stroke:#0f766e,color:#052e22
+    classDef errNode fill:#f6b8b8,stroke:#b91c1c,color:#450a0a
 ```
 
 `main.go` is the CLI itself: subcommand dispatch, flag parsing, config layering, and output. The binary is `runner-spawner`; `toolVersion` (see [version.go.md](version.go.md)) is stamped at link time.

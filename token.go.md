@@ -2,16 +2,22 @@
 
 ```mermaid
 flowchart TD
-    Need[create / remove need a<br/>registration token] --> Flag{--token / cfg.Token?}
-    Flag -->|yes| Use[use it]
-    Flag -->|no| Env{RUNNER_SPAWNER_TOKEN<br/>GH_TOKEN · GITHUB_TOKEN?}
+    Need("<img src='barnacle:key.svg' width='20' alt=''/><br/><u>create / remove need a<br/>registration token</u>") --> Flag{{"<img src='barnacle:hexagon.svg' width='20' alt=''/><br/>--token / cfg.Token?"}}
+    Flag -->|yes| Use("<img src='barnacle:key.svg' width='20' alt=''/><br/>use it")
+    Flag -->|no| Env{{"<img src='barnacle:hexagon.svg' width='20' alt=''/><br/>RUNNER_SPAWNER_TOKEN<br/>GH_TOKEN · GITHUB_TOKEN?"}}
     Env -->|yes| Use
-    Env -->|no| GH[gh api repos/o/r<br/>actions/runners<br/>registration-token -X POST]
+    Env -->|no| GH("<img src='barnacle:terminal.svg' width='20' alt=''/><br/><u>gh api repos/o/r<br/>actions/runners<br/>registration-token -X POST</u>")
     GH --> Use
-    GH -->|fails| Err([error: pass --token<br/>or gh auth login])
-    Use --> Never[never printed · never logged<br/>never written to config<br/>absent from --format json]
+    GH -->|fails| Err("<img src='barnacle:circle-exclamation-point.svg' width='20' alt=''/><br/>error: pass --token<br/>or gh auth login")
+    Use --> Never("<img src='barnacle:shield.svg' width='20' alt=''/><br/>never printed · never logged<br/>never written to config<br/>absent from --format json")
     click GH href "script.go.md"
     click Need href "verbs.go.md"
+    class Flag,Env hexNode
+    class GH shFile
+    class Err errNode
+    classDef hexNode fill:#ffe08a,stroke:#a16207,color:#422006
+    classDef shFile fill:#abe07a,stroke:#3f6212,color:#16280a
+    classDef errNode fill:#f6b8b8,stroke:#b91c1c,color:#450a0a
 ```
 
 `token.go` resolves the short-lived **registration token** the runner needs to register with GitHub. The token is never printed, never logged, never written to `.runner-spawner.json`, and is absent from `--format json` output. Callers in dry-run mode must not call this.

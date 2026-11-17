@@ -2,15 +2,27 @@
 
 ```mermaid
 flowchart TD
-    Rel[scripts/release.sh] --> Pre[preconditions<br/>git go tar zip · clean tree]
-    Pre --> Ver[versioner<br/>compute next tag]
-    Ver --> Cross[cross-compile six Go targets<br/>CGO off · ldflags toolVersion]
-    Cross --> Pack[archives + checksums.txt]
-    Pack --> Dry{--dry-run?}
-    Dry -->|yes| Stop([print plan · touch nothing])
-    Dry -->|no| Tag[annotated tag + push<br/>+ gh release create]
-    Tag --> Remind([refresh tools/runner-spawner bundle])
+    Rel("<img src='barnacle:terminal.svg' width='20' alt=''/><br/><u>scripts/release.sh</u>") --> Pre("<img src='barnacle:check.svg' width='20' alt=''/><br/>preconditions<br/>git go tar zip · clean tree")
+    Pre --> Ver("<img src='barnacle:tag.svg' width='20' alt=''/><br/>versioner<br/>compute next tag")
+    Ver --> Cross("<img src='barnacle:file-code.svg' width='20' alt=''/><br/>cross-compile six Go targets<br/>CGO off · ldflags toolVersion")
+    Cross --> Pack("<img src='barnacle:package.svg' width='20' alt=''/><br/>archives + checksums.txt")
+    Pack --> Dry{{"<img src='barnacle:hexagon.svg' width='20' alt=''/><br/>--dry-run?"}}
+    Dry -->|yes| Stop("<img src='barnacle:check.svg' width='20' alt=''/><br/>print plan · touch nothing")
+    Dry -->|no| Tag("<img src='barnacle:tag.svg' width='20' alt=''/><br/>annotated tag + push<br/>+ gh release create")
+    Tag --> Remind("<img src='barnacle:bell.svg' width='20' alt=''/><br/>refresh tools/runner-spawner bundle")
     click Rel href "README.md"
+    class Rel shFile
+    class Pre,Stop checkNode
+    class Ver,Tag tagNode
+    class Cross goFile
+    class Pack boxNode
+    class Dry hexNode
+    classDef shFile fill:#abe07a,stroke:#3f6212,color:#16280a
+    classDef checkNode fill:#9fe8c9,stroke:#0f766e,color:#052e22
+    classDef tagNode fill:#f6b8d4,stroke:#be185d,color:#500724
+    classDef goFile fill:#8fd8ef,stroke:#0277a8,color:#08303d
+    classDef boxNode fill:#e8cf9d,stroke:#a16207,color:#33240a
+    classDef hexNode fill:#ffe08a,stroke:#a16207,color:#422006
 ```
 
 `scripts/release.sh` versions, builds, packages, tags and publishes a GitHub release for runner-spawner. Everything it does flows through the [scripts](README.md) tooling and the pinned tools (`tools/README.md`).

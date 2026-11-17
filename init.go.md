@@ -2,18 +2,28 @@
 
 ```mermaid
 flowchart TD
-    Init[runner-spawner init] --> Flags{only --help / --dir?}
-    Flags -->|no| Usage([exit 2<br/>usage error])
-    Flags -->|yes| Remote[detectGitRemoteOwnerRepo<br/>git.go.md]
-    Remote --> Write[write .runner-spawner.json<br/>owner repo runnerNames …]
-    Write --> Exists{file exists?}
-    Exists -->|no| Done([written])
-    Exists -->|yes, non-tty| Refuse([exit 2<br/>never overwrite])
-    Exists -->|yes, tty| Prompt{Overwrite? y/N}
+    Init("<img src='barnacle:file-code.svg' width='20' alt=''/><br/>runner-spawner init") --> Flags{{"<img src='barnacle:hexagon.svg' width='20' alt=''/><br/>only --help / --dir?"}}
+    Flags -->|no| Usage("<img src='barnacle:circle-exclamation-point.svg' width='20' alt=''/><br/>exit 2<br/>usage error")
+    Flags -->|yes| Remote("<img src='barnacle:file-code.svg' width='20' alt=''/><br/><u>detectGitRemoteOwnerRepo<br/>git.go.md</u>")
+    Remote --> Write("<img src='barnacle:braces.svg' width='20' alt=''/><br/><u>write .runner-spawner.json<br/>owner repo runnerNames …</u>")
+    Write --> Exists{{"<img src='barnacle:hexagon.svg' width='20' alt=''/><br/>file exists?"}}
+    Exists -->|no| Done("<img src='barnacle:check.svg' width='20' alt=''/><br/>written")
+    Exists -->|yes, non-tty| Refuse("<img src='barnacle:circle-exclamation-point.svg' width='20' alt=''/><br/>exit 2<br/>never overwrite")
+    Exists -->|yes, tty| Prompt{{"<img src='barnacle:hexagon.svg' width='20' alt=''/><br/>Overwrite? y/N"}}
     Prompt -->|y| Done
     Prompt -->|N| Refuse
     click Remote href "git.go.md"
     click Write href "config.go.md"
+    class Init,Remote goFile
+    class Flags,Exists,Prompt hexNode
+    class Usage,Refuse errNode
+    class Write jsonFile
+    class Done checkNode
+    classDef goFile fill:#8fd8ef,stroke:#0277a8,color:#08303d
+    classDef hexNode fill:#ffe08a,stroke:#a16207,color:#422006
+    classDef errNode fill:#f6b8b8,stroke:#b91c1c,color:#450a0a
+    classDef jsonFile fill:#cdb9f7,stroke:#6d28d9,color:#2e1065
+    classDef checkNode fill:#9fe8c9,stroke:#0f766e,color:#052e22
 ```
 
 `init.go` implements `runner-spawner init [--dir DIR]`: write a `.runner-spawner.json` for a repository, detecting owner/repo from its git remote — the same bootstrap step the README walks through by hand.

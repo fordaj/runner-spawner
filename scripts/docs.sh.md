@@ -2,13 +2,19 @@
 
 ```mermaid
 flowchart LR
-    Docs[scripts/docs.sh] --> Entry[entry.sh<br/>BARNACLE_BIN from cascade]
-    Entry --> Barnacle[pinned barnacle<br/>tools/barnacle]
-    Docs --> Root[repo root as cwd]
-    Root --> Scan[barnacle scans .md + .mmd<br/>.barnacle.json config]
-    Scan --> Site[./site/<br/>git-ignored static HTML]
+    Docs("<img src='barnacle:terminal.svg' width='20' alt=''/><br/>scripts/docs.sh") --> Entry("<img src='barnacle:terminal.svg' width='20' alt=''/><br/><u>entry.sh<br/>BARNACLE_BIN from cascade</u>")
+    Entry --> Barnacle("<img src='barnacle:box.svg' width='20' alt=''/><br/>pinned barnacle<br/>tools/barnacle")
+    Docs --> Root("<img src='barnacle:folder.svg' width='20' alt=''/><br/>repo root as cwd")
+    Root --> Scan("<img src='barnacle:file-search.svg' width='20' alt=''/><br/>barnacle scans .md + .mmd<br/>.barnacle.json config")
+    Scan --> Site("<img src='barnacle:folder.svg' width='20' alt=''/><br/><u>./site/<br/>git-ignored static HTML</u>")
     click Entry href "entry.sh.md"
     click Site href "../AGENTS.md"
+    class Docs,Entry shFile
+    class Barnacle boxNode
+    class Root,Site folder
+    classDef shFile fill:#abe07a,stroke:#3f6212,color:#16280a
+    classDef boxNode fill:#e8cf9d,stroke:#a16207,color:#33240a
+    classDef folder fill:#f0c558,stroke:#8a6d1c,color:#332a05
 ```
 
 Generates the documentation site: it runs the pinned `barnacle` (`tools/barnacle/update.sh.md`) binary against this repository.

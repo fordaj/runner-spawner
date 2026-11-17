@@ -2,18 +2,30 @@
 
 ```mermaid
 flowchart TD
-    Tools[tools/&lt;name&gt;] --> Upd[update.sh<br/>thin wrapper per bundle]
-    Upd --> Shared[tools/update.sh<br/>shared implementation]
-    Shared --> DL[gh release download<br/>platform archives]
-    DL --> Verify{checksums.txt<br/>present?}
-    Verify -->|yes| OK[verify SHA-256]
-    Verify -->|no| Warn[warn · continue<br/>runner-spawner aborts]
-    OK --> Stage[stage into bundle temp dir]
+    Tools("<img src='barnacle:folder.svg' width='20' alt=''/><br/>tools/&lt;name&gt;") --> Upd("<img src='barnacle:terminal.svg' width='20' alt=''/><br/><u>update.sh<br/>thin wrapper per bundle</u>")
+    Upd --> Shared("<img src='barnacle:terminal.svg' width='20' alt=''/><br/><u>tools/update.sh<br/>shared implementation</u>")
+    Shared --> DL("<img src='barnacle:download.svg' width='20' alt=''/><br/>gh release download<br/>platform archives")
+    DL --> Verify{{"<img src='barnacle:hexagon.svg' width='20' alt=''/><br/>checksums.txt<br/>present?"}}
+    Verify -->|yes| OK("<img src='barnacle:check.svg' width='20' alt=''/><br/>verify SHA-256")
+    Verify -->|no| Warn("<img src='barnacle:triangle-exclamation-point.svg' width='20' alt=''/><br/>warn · continue<br/>runner-spawner aborts")
+    OK --> Stage("<img src='barnacle:folder.svg' width='20' alt=''/><br/>stage into bundle temp dir")
     Warn --> Stage
-    Stage --> Swap[atomic swap<br/>delete superseded v*/]
-    Swap --> Smoke[smoke test<br/>--version]
+    Stage --> Swap("<img src='barnacle:package.svg' width='20' alt=''/><br/>atomic swap<br/>delete superseded v*/")
+    Swap --> Smoke("<img src='barnacle:check.svg' width='20' alt=''/><br/>smoke test<br/>--version")
     click Upd href "barnacle/update.sh.md"
     click Shared href "update.sh.md"
+    class Tools,Stage folder
+    class Upd,Shared shFile
+    class DL dlNode
+    class Verify hexNode
+    class OK,Smoke checkNode
+    class Swap boxNode
+    classDef folder fill:#f0c558,stroke:#8a6d1c,color:#332a05
+    classDef shFile fill:#abe07a,stroke:#3f6212,color:#16280a
+    classDef dlNode fill:#93e2e2,stroke:#0f766e,color:#042f2e
+    classDef hexNode fill:#ffe08a,stroke:#a16207,color:#422006
+    classDef checkNode fill:#9fe8c9,stroke:#0f766e,color:#052e22
+    classDef boxNode fill:#e8cf9d,stroke:#a16207,color:#33240a
 ```
 
 `tools/` carries the repository's pinned helper binaries — release, logging, docs, and formatting tooling — plus one `update.sh` per tool that refreshes them. These are **not** the GitHub Actions runner the CLI installs (the runner archive is downloaded and cached per repository under `<runnersDir>/cache/`); they are the tools used to build, release, log, and document this repository itself.

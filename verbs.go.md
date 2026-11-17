@@ -2,27 +2,33 @@
 
 ```mermaid
 flowchart TD
-    Dispatch[runVerb dispatch<br/>main.go.md] --> Verb{verb}
-    Verb --> Create[createOne]
-    Verb --> Remove[removeOne]
-    Verb --> Control[startOne / stopOne]
-    Verb --> Status[statusOne / list]
-    Create --> Lock[lockRunner · lock.go.md]
+    Dispatch("<img src='barnacle:file-code.svg' width='20' alt=''/><br/><u>runVerb dispatch<br/>main.go.md</u>") --> Verb{{"<img src='barnacle:hexagon.svg' width='20' alt=''/><br/>verb"}}
+    Verb --> Create("<img src='barnacle:file-code.svg' width='20' alt=''/><br/>createOne")
+    Verb --> Remove("<img src='barnacle:file-code.svg' width='20' alt=''/><br/>removeOne")
+    Verb --> Control("<img src='barnacle:file-code.svg' width='20' alt=''/><br/>startOne / stopOne")
+    Verb --> Status("<img src='barnacle:file-code.svg' width='20' alt=''/><br/>statusOne / list")
+    Create --> Lock("<img src='barnacle:file-code.svg' width='20' alt=''/><br/><u>lockRunner · lock.go.md</u>")
     Remove --> Lock
     Control --> Lock
-    Lock --> Detect[DetectLifecycle<br/>lifecycle.go.md]
-    Detect -->|already running| NoOp([no-op])
-    Detect -->|missing or partial| Heal[ensure archive → extract<br/>configure → install + start service]
-    Detect -->|remove| Teardown[stop → uninstall → deregister<br/>delete dir → prune registry]
-    Heal --> Record[recordInstallation<br/>install.go.md]
-    Teardown --> Prune[prune registry entry]
-    Status --> Hint[hintFor remediation<br/>lifecycle.go.md]
+    Lock --> Detect("<img src='barnacle:file-code.svg' width='20' alt=''/><br/><u>DetectLifecycle<br/>lifecycle.go.md</u>")
+    Detect -->|already running| NoOp("<img src='barnacle:check.svg' width='20' alt=''/><br/>no-op")
+    Detect -->|missing or partial| Heal("<img src='barnacle:file-code.svg' width='20' alt=''/><br/><u>ensure archive → extract<br/>configure → install + start service</u>")
+    Detect -->|remove| Teardown("<img src='barnacle:file-code.svg' width='20' alt=''/><br/>stop → uninstall → deregister<br/>delete dir → prune registry")
+    Heal --> Record("<img src='barnacle:file-code.svg' width='20' alt=''/><br/><u>recordInstallation<br/>install.go.md</u>")
+    Teardown --> Prune("<img src='barnacle:file-code.svg' width='20' alt=''/><br/>prune registry entry")
+    Status --> Hint("<img src='barnacle:file-code.svg' width='20' alt=''/><br/><u>hintFor remediation<br/>lifecycle.go.md</u>")
     click Dispatch href "main.go.md"
     click Lock href "lock.go.md"
     click Detect href "lifecycle.go.md"
     click Heal href "archive.go.md"
     click Record href "install.go.md"
     click Hint href "lifecycle.go.md"
+    class Dispatch,Create,Remove,Control,Status,Lock,Detect,Heal,Teardown,Record,Prune,Hint goFile
+    class Verb hexNode
+    class NoOp checkNode
+    classDef goFile fill:#8fd8ef,stroke:#0277a8,color:#08303d
+    classDef hexNode fill:#ffe08a,stroke:#a16207,color:#422006
+    classDef checkNode fill:#9fe8c9,stroke:#0f766e,color:#052e22
 ```
 
 `verbs.go` is the largest file in the module: it implements the per-installation operations behind `create`, `remove`, `start`, `stop`, `status` and `list`. Shared plumbing (scope, locks, archive, platform) lives in the sibling files; this file is the orchestration layer.

@@ -2,16 +2,32 @@
 
 ```mermaid
 flowchart TD
-    Upd[tools/runner-spawner/update.sh] --> Tag[resolve tag<br/>latest release or --tag]
-    Tag --> DL[gh release download<br/>platform archives]
-    DL --> Verify{checksums.txt<br/>present?}
-    Verify -->|yes| OK[verify SHA-256]
-    Verify -->|no| Abort([abort · refuse<br/>unverified binaries])
-    OK --> Stage[stage into bundle temp dir]
-    Stage --> Swap[atomic swap<br/>delete superseded v*/]
-    Release[scripts/release.sh<br/>reminds to refresh] -.-> Upd
+    Upd("<img src='barnacle:terminal.svg' width='20' alt=''/><br/><u>tools/runner-spawner/update.sh</u>") --> Tag("<img src='barnacle:tag.svg' width='20' alt=''/><br/>resolve tag<br/>latest release or --tag")
+    Tag --> DL("<img src='barnacle:download.svg' width='20' alt=''/><br/>gh release download<br/>platform archives")
+    DL --> Verify{{"<img src='barnacle:hexagon.svg' width='20' alt=''/><br/>checksums.txt<br/>present?"}}
+    Verify -->|yes| OK("<img src='barnacle:check.svg' width='20' alt=''/><br/>verify SHA-256")
+    Verify -->|no| Abort("<img src='barnacle:circle-exclamation-point.svg' width='20' alt=''/><br/>abort · refuse<br/>unverified binaries")
+    OK --> Stage("<img src='barnacle:folder.svg' width='20' alt=''/><br/>stage into bundle temp dir")
+    Stage --> Swap("<img src='barnacle:package.svg' width='20' alt=''/><br/>atomic swap<br/>delete superseded v*/")
+    Release("<img src='barnacle:terminal.svg' width='20' alt=''/><br/><u>scripts/release.sh<br/>reminds to refresh</u>") -.-> Upd
     click Upd href "../README.md"
     click Release href "../../scripts/release.sh.md"
+    class Upd,Release shFile
+    class Tag tagNode
+    class DL dlNode
+    class Verify hexNode
+    class Abort errNode
+    class OK checkNode
+    class Stage folder
+    class Swap boxNode
+    classDef shFile fill:#abe07a,stroke:#3f6212,color:#16280a
+    classDef tagNode fill:#f6b8d4,stroke:#be185d,color:#500724
+    classDef dlNode fill:#93e2e2,stroke:#0f766e,color:#042f2e
+    classDef hexNode fill:#ffe08a,stroke:#a16207,color:#422006
+    classDef errNode fill:#f6b8b8,stroke:#b91c1c,color:#450a0a
+    classDef checkNode fill:#9fe8c9,stroke:#0f766e,color:#052e22
+    classDef folder fill:#f0c558,stroke:#8a6d1c,color:#332a05
+    classDef boxNode fill:#e8cf9d,stroke:#a16207,color:#33240a
 ```
 
 [Runner-spawner](https://github.com/fordaj/runner-spawner) **is this repository** — the same CLI this tree builds from source. This bundle pins the latest *released* binaries so scripts and CI can run the published artifact without building it. The currently pinned release is **`v0.0.1.2.15`**; the committed `.runner-spawner.json` targets this repository itself (`owner: fordaj`, `repo: runner-spawner`, `runnerNames: ["runner01"]`).

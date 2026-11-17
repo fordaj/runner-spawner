@@ -2,14 +2,20 @@
 
 ```mermaid
 flowchart TD
-    Entry[scripts/entry.sh] --> Env[env.sh<br/>cascade + absolute *_BIN]
-    Entry --> Log[log LEVEL message<br/>timestamped records]
-    Log --> Bin{logamuffin binary<br/>available?}
-    Bin -->|yes| Muff[pinned logamuffin<br/>LOGAMUFFIN_BIN]
-    Bin -->|no| Printf[printf fallback<br/>same call shape]
-    Scripts[version.sh · docs.sh · format.sh<br/>tools update scripts] --> Entry
+    Entry("<img src='barnacle:terminal.svg' width='20' alt=''/><br/>scripts/entry.sh") --> Env("<img src='barnacle:terminal.svg' width='20' alt=''/><br/><u>env.sh<br/>cascade + absolute *_BIN</u>")
+    Entry --> Log("<img src='barnacle:file-text.svg' width='20' alt=''/><br/>log LEVEL message<br/>timestamped records")
+    Log --> Bin{{"<img src='barnacle:hexagon.svg' width='20' alt=''/><br/>logamuffin binary<br/>available?"}}
+    Bin -->|yes| Muff("<img src='barnacle:box.svg' width='20' alt=''/><br/>pinned logamuffin<br/>LOGAMUFFIN_BIN")
+    Bin -->|no| Printf("<img src='barnacle:terminal.svg' width='20' alt=''/><br/>printf fallback<br/>same call shape")
+    Scripts("<img src='barnacle:terminal.svg' width='20' alt=''/><br/><u>version.sh · docs.sh · format.sh<br/>tools update scripts</u>") --> Entry
     click Env href "env.sh.md"
     click Scripts href "README.md"
+    class Entry,Env,Printf,Scripts shFile
+    class Bin hexNode
+    class Muff boxNode
+    classDef shFile fill:#abe07a,stroke:#3f6212,color:#16280a
+    classDef hexNode fill:#ffe08a,stroke:#a16207,color:#422006
+    classDef boxNode fill:#e8cf9d,stroke:#a16207,color:#33240a
 ```
 
 Every repository script sources `scripts/entry.sh` instead of the individual cascade files, because it does two jobs at once:
