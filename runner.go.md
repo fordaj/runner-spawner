@@ -2,15 +2,21 @@
 
 ```mermaid
 flowchart TD
-    Platform[platform.go.md<br/>platform descriptor] --> Dir[runnerDirFor<br/>runnersDir/name]
-    Dir --> Extracted{isExtracted<br/>config.sh or config.cmd<br/>plus svc.sh on Unix}
-    Extracted --> Configured{isConfigured<br/>.runner exists}
-    Configured --> Display[displayName<br/>hostname-name]
-    Display --> SvcUnix[serviceName<br/>launchd label / sc.exe service]
-    Display --> SvcWin[serviceName<br/>actions.runner.scope.display]
-    Display --> Cmd[runCmd / runCmdCapture<br/>commandExecution seam]
+    Platform("<img src='barnacle:file-code.svg' width='20' alt=''/><br/><u>platform.go.md<br/>platform descriptor</u>") --> Dir("<img src='barnacle:folder.svg' width='20' alt=''/><br/>runnerDirFor<br/>runnersDir/name")
+    Dir --> Extracted{{"<img src='barnacle:hexagon.svg' width='20' alt=''/><br/>isExtracted<br/>config.sh or config.cmd<br/>plus svc.sh on Unix"}}
+    Extracted --> Configured{{"<img src='barnacle:hexagon.svg' width='20' alt=''/><br/>isConfigured<br/>.runner exists"}}
+    Configured --> Display("<img src='barnacle:file-code.svg' width='20' alt=''/><br/>displayName<br/>hostname-name")
+    Display --> SvcUnix("<img src='barnacle:file-code.svg' width='20' alt=''/><br/>serviceName<br/>launchd label / sc.exe service")
+    Display --> SvcWin("<img src='barnacle:file-code.svg' width='20' alt=''/><br/>serviceName<br/>actions.runner.scope.display")
+    Display --> Cmd("<img src='barnacle:file-code.svg' width='20' alt=''/><br/><u>runCmd / runCmdCapture<br/>commandExecution seam</u>")
     click Platform href "platform.go.md"
     click Cmd href "script.go.md"
+    class Platform,Display,SvcUnix,SvcWin,Cmd goFile
+    class Dir folder
+    class Extracted,Configured hexNode
+    classDef goFile fill:#8fd8ef,stroke:#0277a8,color:#08303d
+    classDef folder fill:#f0c558,stroke:#8a6d1c,color:#332a05
+    classDef hexNode fill:#ffe08a,stroke:#a16207,color:#422006
 ```
 
 `runner.go` collects the small helpers that name and probe a runner installation on disk. They contain no lifecycle logic (that is [verbs.go.md](verbs.go.md) and [lifecycle.go.md](lifecycle.go.md)) — just path math and existence checks, built on the `platform` descriptor from [platform.go.md](platform.go.md).

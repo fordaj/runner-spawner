@@ -2,17 +2,27 @@
 
 ```mermaid
 flowchart TD
-    Create[create verb<br/>verbs.go.md] --> Ensure[ensureArchive<br/>cached download]
-    Ensure --> URL[versionedAsset<br/>release URL for host]
-    Ensure --> Cache{cache hit?}
+    Create("<img src='barnacle:file-code.svg' width='20' alt=''/><br/><u>create verb<br/>verbs.go.md</u>") --> Ensure("<img src='barnacle:file-code.svg' width='20' alt=''/><br/>ensureArchive<br/>cached download")
+    Ensure --> URL("<img src='barnacle:file-code.svg' width='20' alt=''/><br/><u>versionedAsset<br/>release URL for host</u>")
+    Ensure --> Cache{{"<img src='barnacle:hexagon.svg' width='20' alt=''/><br/>cache hit?"}}
     Cache -->|yes| Extract
-    Cache -->|no| DL[download to temp file<br/>rename into cache]
-    DL --> Extract[extractArchiveAtomic<br/>staging dir next to target]
-    Extract --> Swap[old dir to backup,<br/>staging to dir,<br/>backup removed]
-    Platform[platform.go.md] -.-> URL
+    Cache -->|no| DL("<img src='barnacle:download.svg' width='20' alt=''/><br/>download to temp file<br/>rename into cache")
+    DL --> Extract("<img src='barnacle:package.svg' width='20' alt=''/><br/>extractArchiveAtomic<br/>staging dir next to target")
+    Extract --> Swap("<img src='barnacle:folder.svg' width='20' alt=''/><br/>old dir to backup,<br/>staging to dir,<br/>backup removed")
+    Platform("<img src='barnacle:file-code.svg' width='20' alt=''/><br/><u>platform.go.md</u>") -.-> URL
     click Create href "verbs.go.md"
     click Platform href "platform.go.md"
     click URL href "config.go.md"
+    class Create,Ensure,URL,Platform goFile
+    class Cache hexNode
+    class DL dlNode
+    class Extract boxNode
+    class Swap folder
+    classDef goFile fill:#8fd8ef,stroke:#0277a8,color:#08303d
+    classDef hexNode fill:#ffe08a,stroke:#a16207,color:#422006
+    classDef dlNode fill:#93e2e2,stroke:#0f766e,color:#042f2e
+    classDef boxNode fill:#e8cf9d,stroke:#a16207,color:#33240a
+    classDef folder fill:#f0c558,stroke:#8a6d1c,color:#332a05
 ```
 
 `archive.go` fetches the pinned `actions/runner` release and unpacks it safely. It covers the whole path from URL to atomically-swapped install directory.

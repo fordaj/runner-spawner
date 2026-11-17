@@ -2,14 +2,24 @@
 
 ```mermaid
 flowchart LR
-    Src[version.go<br/>toolVersion = dev] --> Stamp{build path}
-    Stamp -->|make build / cross| Mk[Makefile LDFLAGS<br/>-X main.toolVersion=tag]
-    Stamp -->|scripts/release.sh| Rel[computed by versioner<br/>scripts/release.sh.md]
-    Mk --> Bin[runner-spawner binary<br/>reports stamped tag]
+    Src("<img src='barnacle:file-code.svg' width='20' alt=''/><br/>version.go<br/>toolVersion = dev") --> Stamp{{"<img src='barnacle:hexagon.svg' width='20' alt=''/><br/>build path"}}
+    Stamp -->|make build / cross| Mk("<img src='barnacle:hammer.svg' width='20' alt=''/><br/>Makefile LDFLAGS<br/>-X main.toolVersion=tag")
+    Stamp -->|scripts/release.sh| Rel("<img src='barnacle:terminal.svg' width='20' alt=''/><br/><u>computed by versioner<br/>scripts/release.sh.md</u>")
+    Mk --> Bin("<img src='barnacle:box.svg' width='20' alt=''/><br/>runner-spawner binary<br/>reports stamped tag")
     Rel --> Bin
-    Bin --> Out([runner-spawner --version<br/>main.go.md])
+    Bin --> Out("<img src='barnacle:check.svg' width='20' alt=''/><br/><u>runner-spawner --version<br/>main.go.md</u>")
     click Rel href "scripts/release.sh.md"
     click Out href "main.go.md"
+    class Src goFile
+    class Stamp hexNode
+    class Rel shFile
+    class Bin boxNode
+    class Out checkNode
+    classDef goFile fill:#8fd8ef,stroke:#0277a8,color:#08303d
+    classDef hexNode fill:#ffe08a,stroke:#a16207,color:#422006
+    classDef shFile fill:#abe07a,stroke:#3f6212,color:#16280a
+    classDef boxNode fill:#e8cf9d,stroke:#a16207,color:#33240a
+    classDef checkNode fill:#9fe8c9,stroke:#0f766e,color:#052e22
 ```
 
 `version.go` holds exactly one declaration: `toolVersion`, the string printed by `runner-spawner --version` (`runner-spawner <version>`) and read at startup by [main.go.md](main.go.md).

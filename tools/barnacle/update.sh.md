@@ -2,15 +2,27 @@
 
 ```mermaid
 flowchart TD
-    Upd[tools/barnacle/update.sh] --> Tag[resolve tag<br/>latest release or --tag]
-    Tag --> DL[gh release download<br/>macos linux windows × x86_64 arm64]
-    DL --> Verify[verify against<br/>checksums.txt]
-    Verify --> Stage[stage into bundle temp dir]
-    Stage --> Swap[swap in v‹tag›/<br/>delete superseded]
-    Swap --> Smoke[host binary --version<br/>must contain tag]
-    ClickSite[scripts/docs.sh<br/>uses this bundle] -.-> Upd
+    Upd("<img src='barnacle:terminal.svg' width='20' alt=''/><br/><u>tools/barnacle/update.sh</u>") --> Tag("<img src='barnacle:tag.svg' width='20' alt=''/><br/>resolve tag<br/>latest release or --tag")
+    Tag --> DL("<img src='barnacle:download.svg' width='20' alt=''/><br/>gh release download<br/>macos linux windows × x86_64 arm64")
+    DL --> Verify("<img src='barnacle:check.svg' width='20' alt=''/><br/>verify against<br/>checksums.txt")
+    Verify --> Stage("<img src='barnacle:folder.svg' width='20' alt=''/><br/>stage into bundle temp dir")
+    Stage --> Swap("<img src='barnacle:package.svg' width='20' alt=''/><br/>swap in v‹tag›/<br/>delete superseded")
+    Swap --> Smoke("<img src='barnacle:check.svg' width='20' alt=''/><br/>host binary --version<br/>must contain tag")
+    ClickSite("<img src='barnacle:terminal.svg' width='20' alt=''/><br/><u>scripts/docs.sh<br/>uses this bundle</u>") -.-> Upd
     click ClickSite href "../../scripts/docs.sh.md"
     click Upd href "../README.md"
+    class Upd,ClickSite shFile
+    class Tag tagNode
+    class DL dlNode
+    class Verify,Smoke checkNode
+    class Stage folder
+    class Swap boxNode
+    classDef shFile fill:#abe07a,stroke:#3f6212,color:#16280a
+    classDef tagNode fill:#f6b8d4,stroke:#be185d,color:#500724
+    classDef dlNode fill:#93e2e2,stroke:#0f766e,color:#042f2e
+    classDef checkNode fill:#9fe8c9,stroke:#0f766e,color:#052e22
+    classDef folder fill:#f0c558,stroke:#8a6d1c,color:#332a05
+    classDef boxNode fill:#e8cf9d,stroke:#a16207,color:#33240a
 ```
 
 [Barnacle](https://github.com/fordaj/barnacle) is a documentation-site generator: it renders the `.md` and `.mmd` files scattered through a repository into a static, navigable HTML site. This repository uses it to render *this* documentation; the site you may be reading was built by it.

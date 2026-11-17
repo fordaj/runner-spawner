@@ -2,17 +2,17 @@
 
 ```mermaid
 flowchart TD
-    CLI[runner-spawner CLI<br/>main.go] --> Verbs[verbs.go<br/>create remove start stop status list]
-    CLI --> Init[init.go<br/>write .runner-spawner.json]
-    CLI --> Inventory[inventory.go<br/>read-only GitHub inventory]
-    Verbs --> Config[config.go<br/>defaults to file to env to flags]
-    Verbs --> Archive[archive.go<br/>download + atomic extract]
-    Verbs --> Lifecycle[lifecycle.go<br/>disk state + service probe]
-    Verbs --> Registry[install.go<br/>marker + machine registry]
-    Registry --> Scope[scope.go<br/>directory repo pc]
-    Config --> Git[git.go<br/>origin remote owner/repo]
-    Archive --> Platform[platform.go<br/>macOS + Windows]
-    Inventory --> GH[(GitHub API<br/>via gh CLI)]
+    CLI("<img src='barnacle:file-code.svg' width='20' alt=''/><br/>runner-spawner CLI<br/>main.go") --> Verbs("<img src='barnacle:file-code.svg' width='20' alt=''/><br/><u>verbs.go<br/>create remove start stop status list</u>")
+    CLI --> Init("<img src='barnacle:file-code.svg' width='20' alt=''/><br/><u>init.go<br/>write .runner-spawner.json</u>")
+    CLI --> Inventory("<img src='barnacle:file-code.svg' width='20' alt=''/><br/><u>inventory.go<br/>read-only GitHub inventory</u>")
+    Verbs --> Config("<img src='barnacle:file-code.svg' width='20' alt=''/><br/><u>config.go<br/>defaults to file to env to flags</u>")
+    Verbs --> Archive("<img src='barnacle:file-code.svg' width='20' alt=''/><br/><u>archive.go<br/>download + atomic extract</u>")
+    Verbs --> Lifecycle("<img src='barnacle:file-code.svg' width='20' alt=''/><br/><u>lifecycle.go<br/>disk state + service probe</u>")
+    Verbs --> Registry("<img src='barnacle:file-code.svg' width='20' alt=''/><br/><u>install.go<br/>marker + machine registry</u>")
+    Registry --> Scope("<img src='barnacle:file-code.svg' width='20' alt=''/><br/><u>scope.go<br/>directory repo pc</u>")
+    Config --> Git("<img src='barnacle:file-code.svg' width='20' alt=''/><br/><u>git.go<br/>origin remote owner/repo</u>")
+    Archive --> Platform("<img src='barnacle:file-code.svg' width='20' alt=''/><br/><u>platform.go<br/>macOS + Windows</u>")
+    Inventory --> GH("<img src='barnacle:globe.svg' width='20' alt=''/><br/>GitHub API<br/>via gh CLI")
     click Verbs href "verbs.go.md"
     click Init href "init.go.md"
     click Inventory href "inventory.go.md"
@@ -23,6 +23,8 @@ flowchart TD
     click Scope href "scope.go.md"
     click Git href "git.go.md"
     click Platform href "platform.go.md"
+    class CLI,Verbs,Init,Inventory,Config,Archive,Lifecycle,Registry,Scope,Git,Platform goFile
+    classDef goFile fill:#8fd8ef,stroke:#0277a8,color:#08303d
 ```
 
 Install and manage repository-scoped self-hosted GitHub Actions

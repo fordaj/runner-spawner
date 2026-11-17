@@ -2,14 +2,18 @@
 
 ```mermaid
 flowchart TD
-    Source[source scripts/env.sh<br/>bash or zsh] --> Locate[locate cascade relative<br/>to this file]
-    Locate --> Common[.common.env<br/>TOOLS_DIR · pins · repo slugs]
-    Locate --> Platform[.OS-ARCH.env<br/>PROJECT_PLATFORM + *_BIN]
-    Common --> Anchor[anchor *_BIN to repo root<br/>REPO_ROOT_DIR]
+    Source("<img src='barnacle:terminal.svg' width='20' alt=''/><br/>source scripts/env.sh<br/>bash or zsh") --> Locate("<img src='barnacle:terminal.svg' width='20' alt=''/><br/>locate cascade relative<br/>to this file")
+    Locate --> Common("<img src='barnacle:terminal.svg' width='20' alt=''/><br/>.common.env<br/>TOOLS_DIR · pins · repo slugs")
+    Locate --> Platform("<img src='barnacle:terminal.svg' width='20' alt=''/><br/>.OS-ARCH.env<br/>PROJECT_PLATFORM + *_BIN")
+    Common --> Anchor("<img src='barnacle:terminal.svg' width='20' alt=''/><br/>anchor *_BIN to repo root<br/>REPO_ROOT_DIR")
     Platform --> Anchor
-    Anchor --> Export[all exported with set -a<br/>un-exported at the end]
-    Platform -.-> Unsupported([unsupported platform<br/>error · return 1])
+    Anchor --> Export("<img src='barnacle:terminal.svg' width='20' alt=''/><br/><u>all exported with set -a<br/>un-exported at the end</u>")
+    Platform -.-> Unsupported("<img src='barnacle:circle-exclamation-point.svg' width='20' alt=''/><br/>unsupported platform<br/>error · return 1")
     click Export href "entry.sh.md"
+    class Source,Locate,Common,Platform,Anchor,Export shFile
+    class Unsupported errNode
+    classDef shFile fill:#abe07a,stroke:#3f6212,color:#16280a
+    classDef errNode fill:#f6b8b8,stroke:#b91c1c,color:#450a0a
 ```
 
 `scripts/env.sh` makes the pinned helper tools resolvable from any script, in any working directory, on every supported platform. It is sourced — never executed — and works from both bash and zsh.

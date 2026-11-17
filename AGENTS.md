@@ -2,15 +2,23 @@
 
 ```mermaid
 flowchart LR
-    Read[Read README.md<br/>the user contract] --> Change[Change the code]
-    Change --> Sibling[Update the sibling .md<br/>in the same change]
-    Sibling --> Regen[scripts/docs.sh<br/>regenerate ./site]
-    Regen --> Review[Self-review<br/>the changed pages]
-    Review --> Checks[make vet + go test<br/>+ ci/format_check.sh]
-    Checks --> Commit[Commit source + doc<br/>together]
+    Read("<img src='barnacle:file-text.svg' width='20' alt=''/><br/><u>Read README.md<br/>the user contract</u>") --> Change("<img src='barnacle:file-code.svg' width='20' alt=''/><br/>Change the code")
+    Change --> Sibling("<img src='barnacle:file-text.svg' width='20' alt=''/><br/><u>Update the sibling .md<br/>in the same change</u>")
+    Sibling --> Regen("<img src='barnacle:terminal.svg' width='20' alt=''/><br/><u>scripts/docs.sh<br/>regenerate ./site</u>")
+    Regen --> Review("<img src='barnacle:check.svg' width='20' alt=''/><br/>Self-review<br/>the changed pages")
+    Review --> Checks("<img src='barnacle:check.svg' width='20' alt=''/><br/>make vet + go test<br/>+ ci/format_check.sh")
+    Checks --> Commit("<img src='barnacle:git-commit-horizontal.svg' width='20' alt=''/><br/>Commit source + doc<br/>together")
     click Read href "README.md"
     click Sibling href "main.go.md"
     click Regen href "scripts/docs.sh.md"
+    class Read,Sibling mdFile
+    class Change goFile
+    class Regen shFile
+    class Review,Checks checkNode
+    classDef mdFile fill:#dcd6ce,stroke:#6b6255,color:#292524
+    classDef goFile fill:#8fd8ef,stroke:#0277a8,color:#08303d
+    classDef shFile fill:#abe07a,stroke:#3f6212,color:#16280a
+    classDef checkNode fill:#9fe8c9,stroke:#0f766e,color:#052e22
 ```
 
 Guidance for AI coding agents working in this repository. The user-facing contract is in [README.md](README.md) — read it first; this file covers how to work on the code and its documentation.

@@ -2,21 +2,25 @@
 
 ```mermaid
 flowchart TD
-    Status[status --scope repo / org / owner] --> Scope{scope?}
-    Scope -->|repo or org| Direct[ghRunners<br/>one endpoint]
-    Scope -->|owner| Agg[collectOwnerInventory<br/>aggregate]
-    Agg --> OrgProbe{isOrg?<br/>orgs/owner}
-    OrgProbe -->|yes| OrgRepos[orgs/org/repos?type=all]
-    OrgProbe -->|no| UserRepos[users/owner/repos?type=owner]
+    Status("<img src='barnacle:file-code.svg' width='20' alt=''/><br/><u>status --scope repo / org / owner</u>") --> Scope{{"<img src='barnacle:hexagon.svg' width='20' alt=''/><br/>scope?"}}
+    Scope -->|repo or org| Direct("<img src='barnacle:file-code.svg' width='20' alt=''/><br/>ghRunners<br/>one endpoint")
+    Scope -->|owner| Agg("<img src='barnacle:file-code.svg' width='20' alt=''/><br/>collectOwnerInventory<br/>aggregate")
+    Agg --> OrgProbe{{"<img src='barnacle:hexagon.svg' width='20' alt=''/><br/>isOrg?<br/>orgs/owner"}}
+    OrgProbe -->|yes| OrgRepos("<img src='barnacle:globe.svg' width='20' alt=''/><br/>orgs/org/repos?type=all")
+    OrgProbe -->|no| UserRepos("<img src='barnacle:globe.svg' width='20' alt=''/><br/>users/owner/repos?type=owner")
     OrgRepos --> Direct
     UserRepos --> Direct
-    Direct --> Parse[parseRunnerNDJSON<br/>gh api --paginate]
-    Parse --> Out[writeInventory<br/>text table or JSON]
-    Scope --> Seam[ghAPI<br/>commandExecution seam]
+    Direct --> Parse("<img src='barnacle:file-code.svg' width='20' alt=''/><br/>parseRunnerNDJSON<br/>gh api --paginate")
+    Parse --> Out("<img src='barnacle:file-code.svg' width='20' alt=''/><br/><u>writeInventory<br/>text table or JSON</u>")
+    Scope --> Seam("<img src='barnacle:file-code.svg' width='20' alt=''/><br/><u>ghAPI<br/>commandExecution seam</u>")
     Direct --> Seam
     click Status href "scope.go.md"
     click Seam href "script.go.md"
     click Out href "main.go.md"
+    class Status,Direct,Agg,Parse,Out,Seam goFile
+    class Scope,OrgProbe hexNode
+    classDef goFile fill:#8fd8ef,stroke:#0277a8,color:#08303d
+    classDef hexNode fill:#ffe08a,stroke:#a16207,color:#422006
 ```
 
 `inventory.go` implements read-only GitHub runner inventory for `runner-spawner status --scope repo|org|owner`. It talks to GitHub exclusively through the `gh` CLI, honoring `gh`'s existing authentication (`gh auth login`, `GH_TOKEN`, `GITHUB_TOKEN`). **Nothing in this file can start, stop, create or remove a runner — every call is a GET.**

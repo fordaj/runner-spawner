@@ -2,17 +2,25 @@
 
 ```mermaid
 flowchart TD
-    Disco[discoverInstallations<br/>scope.go calls this] --> Reg[installations.json<br/>machine-wide index]
-    Reg --> Valid{validRegistryEntry<br/>dir exists, marker parses<br/>matches registry, tool = runner-spawner}
-    Valid -->|no| Warn([warn + never manage])
-    Valid -->|yes| Match{repo / pc scope<br/>repoMatches}
-    Root[configured runners-dir<br/>always in scope] --> Union[sortDiscovered]
+    Disco("<img src='barnacle:file-code.svg' width='20' alt=''/><br/><u>discoverInstallations<br/>scope.go calls this</u>") --> Reg("<img src='barnacle:braces.svg' width='20' alt=''/><br/>installations.json<br/>machine-wide index")
+    Reg --> Valid{{"<img src='barnacle:hexagon.svg' width='20' alt=''/><br/>validRegistryEntry<br/>dir exists, marker parses<br/>matches registry, tool = runner-spawner"}}
+    Valid -->|no| Warn("<img src='barnacle:triangle-exclamation-point.svg' width='20' alt=''/><br/>warn + never manage")
+    Valid -->|yes| Match{{"<img src='barnacle:hexagon.svg' width='20' alt=''/><br/>repo / pc scope<br/>repoMatches"}}
+    Root("<img src='barnacle:folder.svg' width='20' alt=''/><br/>configured runners-dir<br/>always in scope") --> Union("<img src='barnacle:file-code.svg' width='20' alt=''/><br/>sortDiscovered")
     Match -->|match| Union
-    Match -->|no| Skip([out of scope])
-    Union --> Filter[filterByNames<br/>--name filter]
-    Filter --> Targets[mutationTarget per runner<br/>scopedConfig]
+    Match -->|no| Skip("<img src='barnacle:circle-slash.svg' width='20' alt=''/><br/>out of scope")
+    Union --> Filter("<img src='barnacle:file-code.svg' width='20' alt=''/><br/>filterByNames<br/>--name filter")
+    Filter --> Targets("<img src='barnacle:file-code.svg' width='20' alt=''/><br/><u>mutationTarget per runner<br/>scopedConfig</u>")
     click Disco href "scope.go.md"
     click Targets href "verbs.go.md"
+    class Disco,Union,Filter,Targets goFile
+    class Reg jsonFile
+    class Valid,Match hexNode
+    class Root folder
+    classDef goFile fill:#8fd8ef,stroke:#0277a8,color:#08303d
+    classDef jsonFile fill:#cdb9f7,stroke:#6d28d9,color:#2e1065
+    classDef hexNode fill:#ffe08a,stroke:#a16207,color:#422006
+    classDef folder fill:#f0c558,stroke:#8a6d1c,color:#332a05
 ```
 
 `install.go` implements scope-aware discovery of runner-spawner-managed installations on the local machine — the machinery behind `--scope repo` and `--scope pc`.

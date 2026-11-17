@@ -2,14 +2,24 @@
 
 ```mermaid
 flowchart LR
-    Ver[scripts/version.sh] --> Entry[entry.sh<br/>cascade + log]
-    Entry --> Bin[VERSIONER_BIN<br/>pinned bundle or PATH]
-    Bin --> Run[versioner --repo-dir root<br/>--quiet]
-    Run --> Fmt{--format}
-    Fmt -->|text| Text([VERSION + TAG lines])
-    Fmt -->|shell| Shell([export VERSION TAG])
-    Fmt -->|json| Json([raw versioner JSON])
+    Ver("<img src='barnacle:terminal.svg' width='20' alt=''/><br/>scripts/version.sh") --> Entry("<img src='barnacle:terminal.svg' width='20' alt=''/><br/><u>entry.sh<br/>cascade + log</u>")
+    Entry --> Bin("<img src='barnacle:box.svg' width='20' alt=''/><br/>VERSIONER_BIN<br/>pinned bundle or PATH")
+    Bin --> Run("<img src='barnacle:terminal.svg' width='20' alt=''/><br/>versioner --repo-dir root<br/>--quiet")
+    Run --> Fmt{{"<img src='barnacle:hexagon.svg' width='20' alt=''/><br/>--format"}}
+    Fmt -->|text| Text("<img src='barnacle:tag.svg' width='20' alt=''/><br/>VERSION + TAG lines")
+    Fmt -->|shell| Shell("<img src='barnacle:terminal.svg' width='20' alt=''/><br/>export VERSION TAG")
+    Fmt -->|json| Json("<img src='barnacle:braces.svg' width='20' alt=''/><br/>raw versioner JSON")
     click Entry href "entry.sh.md"
+    class Ver,Entry,Run,Shell shFile
+    class Bin boxNode
+    class Fmt hexNode
+    class Text tagNode
+    class Json jsonFile
+    classDef shFile fill:#abe07a,stroke:#3f6212,color:#16280a
+    classDef boxNode fill:#e8cf9d,stroke:#a16207,color:#33240a
+    classDef hexNode fill:#ffe08a,stroke:#a16207,color:#422006
+    classDef tagNode fill:#f6b8d4,stroke:#be185d,color:#500724
+    classDef jsonFile fill:#cdb9f7,stroke:#6d28d9,color:#2e1065
 ```
 
 Prints the version of this repository as computed by the pinned versioner — the same computation the release pipeline uses, so a local build and the published tag cannot drift apart.
